@@ -4,6 +4,8 @@ import nodePath from 'node:path';
 import clone from 'clone';
 import orderedJSON from 'json-order';
 
+import type { CaCertificate } from '~/insomnia-data';
+
 import type {
   ExecutionOption,
   RequestContext,
@@ -17,7 +19,6 @@ import { getRenderedRequestAndContext } from '../common/render';
 import { ascendingFirstIndexStringSort } from '../common/sorting';
 import type { HeaderResult, ResponsePatch, ResponseTimelineEntry } from '../main/network/libcurl-promise';
 import * as models from '../models';
-import type { CaCertificate } from '../models/ca-certificate';
 import type { ClientCertificate } from '../models/client-certificate';
 import type { Cookie, CookieJar } from '../models/cookie-jar';
 import {

@@ -1,7 +1,7 @@
 import { href } from 'react-router';
 
+import type { CaCertificate } from '~/insomnia-data';
 import * as models from '~/models';
-import type { CaCertificate } from '~/models/ca-certificate';
 import { invariant } from '~/utils/invariant';
 import { createFetcherSubmitHook } from '~/utils/router';
 

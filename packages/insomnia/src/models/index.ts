@@ -1,9 +1,9 @@
+import { caCertificate } from '~/insomnia-data';
 import type { AllTypes, BaseModel } from '~/models/types';
 
 import { generateId } from '../common/misc';
 import { typedKeys } from '../utils';
 import * as _apiSpec from './api-spec';
-import * as _caCertificate from './ca-certificate';
 import * as _clientCertificate from './client-certificate';
 import * as _cloudCredential from './cloud-credential';
 import * as _cookieJar from './cookie-jar';
@@ -48,7 +48,7 @@ export type { AllTypes, BaseModel };
 // Reference to each model
 export const apiSpec = _apiSpec;
 export const clientCertificate = _clientCertificate;
-export const caCertificate = _caCertificate;
+export { caCertificate };
 export const cookieJar = _cookieJar;
 export const environment = _environment;
 export const gitCredentials = _gitCredentials;

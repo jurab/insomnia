@@ -1,5 +1,5 @@
-import { database as db } from '../common/database';
-import type { BaseModel } from './types';
+import { database as db } from '~/insomnia-data';
+import type { BaseModel } from '~/models/types';
 
 export const name = 'CA Certificate';
 
