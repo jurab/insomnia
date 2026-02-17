@@ -89,7 +89,7 @@ html {
   grid-template:
     'Header Header' auto
     'Content Content' 1fr
-    'Statusbar Statusbar' 30px [row-end]
+    'Statusbar Statusbar' 0px [row-end]
     / 50px 1fr;
 
   &.with-banner {
@@ -97,7 +97,7 @@ html {
       'Header Header' auto
       'Banner Banner' 30px
       'Content Content' 1fr
-      'Statusbar Statusbar' 30px [row-end]
+      'Statusbar Statusbar' 0px [row-end]
       / 50px 1fr;
 
     &.with-navbar {
@@ -105,7 +105,7 @@ html {
         'Header Header' auto
         'Banner Banner' 30px
         'Navbar Content' 1fr
-        'Statusbar Statusbar' 30px [row-end]
+        'Statusbar Statusbar' 0px [row-end]
         / 50px 1fr;
     }
   }
@@ -114,7 +114,7 @@ html {
     grid-template:
       'Header Header' auto
       'Navbar Content' 1fr
-      'Statusbar Statusbar' 30px [row-end]
+      'Statusbar Statusbar' 0px [row-end]
       / 50px 1fr;
   }
 }
