@@ -17,6 +17,7 @@ import type { CookieJar } from '~/models/cookie-jar';
 import { type Environment } from '~/models/environment';
 import type { GitRepository } from '~/models/git-repository';
 import type { AllTypes, BaseModel } from '~/models/index';
+import type { ProviderSession } from '~/models/provider-session';
 import * as models from '~/models/index';
 import type { Workspace } from '~/models/workspace';
 import type { WorkspaceMeta } from '~/models/workspace-meta';
@@ -245,6 +246,10 @@ export const nedbDatabase: Omit<IDatabase, 'init'> & {
       PluginData: new NeDB({
         ...defaultConfig,
         filename: fsPath.join(dbPath, 'insomnia.PluginData.db'),
+      }),
+      ProviderSession: new NeDB<ProviderSession>({
+        ...defaultConfig,
+        filename: fsPath.join(dbPath, 'insomnia.ProviderSession.db'),
       }),
       Project: new NeDB({
         ...defaultConfig,

@@ -19,6 +19,7 @@ import * as _mockRoute from './mock-route';
 import * as _mockServer from './mock-server';
 import * as _oAuth2Token from './o-auth-2-token';
 import * as _pluginData from './plugin-data';
+import * as _providerSession from './provider-session';
 import * as _project from './project';
 import * as _protoDirectory from './proto-directory';
 import * as _protoFile from './proto-file';
@@ -57,6 +58,7 @@ export const mockServer = _mockServer;
 export const mockRoute = _mockRoute;
 export const oAuth2Token = _oAuth2Token;
 export const pluginData = _pluginData;
+export const providerSession = _providerSession;
 export const request = _request;
 export const requestGroup = _requestGroup;
 export const requestGroupMeta = _requestGroupMeta;
@@ -116,6 +118,7 @@ export function all() {
     caCertificate,
     clientCertificate,
     pluginData,
+    providerSession,
     unitTestSuite,
     unitTestResult,
     unitTest,

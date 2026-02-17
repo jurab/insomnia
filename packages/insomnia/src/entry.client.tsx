@@ -26,14 +26,23 @@ import { getInitialEntry } from './utils/router';
 
 initializeSentry();
 
-// Initialize database for renderer process
+// Show loading progress on screen
+const showProgress = (msg: string) => {
+  console.log(`[startup] ${msg}`);
+  const el = document.getElementById('loading-progress');
+  if (el) el.textContent = msg;
+};
+
+showProgress('Initializing database...');
 await initDatabase(clientDatabase);
 
-// Force onlyResolveOnSuccess to true, will be removed after all usages are updated
+showProgress('Configuring fetch...');
 configureFetch(options => insomniaFetch({ ...options, onlyResolveOnSuccess: true }));
 
+showProgress('Loading plugins...');
 await initPlugins();
 
+showProgress('Migrating storage...');
 await migrateFromLocalStorage();
 
 try {
@@ -119,14 +128,17 @@ if (insomniaSession) {
   }
 }
 
+showProgress('Loading settings...');
 const appSettings = await settings.getOrCreate();
 
 if (appSettings.clearOAuth2SessionOnRestart) {
   initNewOAuthSession();
 }
 
+showProgress('Applying theme...');
 applyColorScheme(appSettings);
 
+showProgress('Resolving route...');
 const initialEntry = await getInitialEntry();
 
 if (typeof initialEntry === 'string' && window.location.pathname !== initialEntry) {
@@ -134,6 +146,7 @@ if (typeof initialEntry === 'string' && window.location.pathname !== initialEntr
   window.location.pathname = initialEntry;
 }
 
+showProgress('Hydrating UI...');
 startTransition(() => {
   hydrateRoot(
     document,

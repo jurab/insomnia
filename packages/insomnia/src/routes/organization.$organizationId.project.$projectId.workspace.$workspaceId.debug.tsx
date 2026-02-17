@@ -3,8 +3,6 @@ import type { ServiceError, StatusObject } from '@grpc/grpc-js';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import React, { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Breadcrumb,
-  Breadcrumbs,
   Button,
   Collection,
   DropIndicator,
@@ -30,7 +28,6 @@ import { type ImperativePanelGroupHandle, Panel, PanelGroup, PanelResizeHandle }
 import {
   href,
   type NavigateFunction,
-  NavLink,
   redirect,
   Route as RouteComponent,
   Routes,
@@ -43,14 +40,13 @@ import { useLocalStorage } from 'react-use';
 
 import { DEFAULT_SIDEBAR_SIZE, getProductName, SORT_ORDERS, type SortOrder, sortOrderName } from '~/common/constants';
 import { type ChangeBufferEvent } from '~/common/database';
-import { generateId, isNotNullOrUndefined } from '~/common/misc';
+import { generateId } from '~/common/misc';
 import type { PlatformKeyCombinations } from '~/common/settings';
 import type { GrpcMethodInfo } from '~/main/ipc/grpc';
 import * as models from '~/models';
 import type { Environment } from '~/models/environment';
 import { type GrpcRequest, isGrpcRequest, isGrpcRequestId } from '~/models/grpc-request';
 import { getByParentId as getGrpcRequestMetaByParentId } from '~/models/grpc-request-meta';
-import { isScratchpadOrganizationId } from '~/models/organization';
 import type { Project } from '~/models/project';
 import {
   isEventStreamRequest,
@@ -64,7 +60,11 @@ import type { RequestGroupMeta } from '~/models/request-group-meta';
 import { getByParentId as getRequestMetaByParentId } from '~/models/request-meta';
 import { isSocketIORequest, isSocketIORequestId, type SocketIORequest } from '~/models/socket-io-request';
 import { isWebSocketRequest, isWebSocketRequestId, type WebSocketRequest } from '~/models/websocket-request';
-import { isDesign } from '~/models/workspace';
+import { syncProviderCookiesToWorkspace } from '~/provider-explorer/cookie-sync';
+import { generateOrRefreshProviderRequests, upsertDiscoveredProviderRequests } from '~/provider-explorer/generate-requests';
+import { getProviderConfig, providerConfigList } from '~/provider-explorer/provider-config';
+import { getProviderSession, saveProviderSession } from '~/provider-explorer/provider-session-store';
+import type { ProviderId } from '~/provider-explorer/types';
 import { useRootLoaderData } from '~/root';
 import {
   type Child,
@@ -75,22 +75,15 @@ import { useRequestLoaderData } from '~/routes/organization.$organizationId.proj
 import { useRequestDuplicateActionFetcher } from '~/routes/organization.$organizationId.project.$projectId.workspace.$workspaceId.debug.request.$requestId.duplicate';
 import { useRequestDeleteActionFetcher } from '~/routes/organization.$organizationId.project.$projectId.workspace.$workspaceId.debug.request.delete';
 import { useRequestNewActionFetcher } from '~/routes/organization.$organizationId.project.$projectId.workspace.$workspaceId.debug.request.new';
-import { useRequestGroupLoaderData } from '~/routes/organization.$organizationId.project.$projectId.workspace.$workspaceId.debug.request-group.$requestGroupId';
 import { useRequestGroupNewActionFetcher } from '~/routes/organization.$organizationId.project.$projectId.workspace.$workspaceId.debug.request-group.new';
 import Runner from '~/routes/organization.$organizationId.project.$projectId.workspace.$workspaceId.debug.runner';
-import Tutorial, {
-  scratchPadTutorialList,
-} from '~/routes/organization.$organizationId.project.$projectId.workspace.$workspaceId.debug.tutorial.$panel';
 import { useToggleExpandAllActionFetcher } from '~/routes/organization.$organizationId.project.$projectId.workspace.$workspaceId.toggle-expand-all';
 import { SegmentEvent } from '~/ui/analytics';
 import { DropdownHint } from '~/ui/components/base/dropdown/dropdown-hint';
-import { DocumentTab } from '~/ui/components/document-tab';
 import { RequestActionsDropdown } from '~/ui/components/dropdowns/request-actions-dropdown';
 import { RequestGroupActionsDropdown } from '~/ui/components/dropdowns/request-group-actions-dropdown';
-import { WorkspaceDropdown } from '~/ui/components/dropdowns/workspace-dropdown';
 import { WorkspaceSyncDropdown } from '~/ui/components/dropdowns/workspace-sync-dropdown';
 import { EditableInput } from '~/ui/components/editable-input';
-import { EnvironmentPicker } from '~/ui/components/environment-picker';
 import { ErrorBoundary } from '~/ui/components/error-boundary';
 import { Icon } from '~/ui/components/icon';
 import { useDocBodyKeyboardShortcuts } from '~/ui/components/keydown-binder';
@@ -104,7 +97,6 @@ import { ImportModal } from '~/ui/components/modals/import-modal/import-modal';
 import { PasteCurlModal } from '~/ui/components/modals/paste-curl-modal';
 import { PromptModal } from '~/ui/components/modals/prompt-modal';
 import { RequestSettingsModal } from '~/ui/components/modals/request-settings-modal';
-import { CertificatesModal } from '~/ui/components/modals/workspace-certificates-modal';
 import { WorkspaceEnvironmentsEditModal } from '~/ui/components/modals/workspace-environments-edit-modal';
 import { GrpcRequestPane } from '~/ui/components/panes/grpc-request-pane';
 import { GrpcResponsePane } from '~/ui/components/panes/grpc-response-pane';
@@ -112,16 +104,14 @@ import { PlaceholderRequestPane } from '~/ui/components/panes/placeholder-reques
 import { RequestGroupPane } from '~/ui/components/panes/request-group-pane';
 import { RequestPane } from '~/ui/components/panes/request-pane';
 import { ResponsePane } from '~/ui/components/panes/response-pane';
+import { RequestUrlBar } from '~/ui/components/request-url-bar';
 import { SocketIORequestPane } from '~/ui/components/socket-io/request-pane';
-import { OrganizationTabList } from '~/ui/components/tabs/tab-list';
 import { getMethodShortHand } from '~/ui/components/tags/method-tag';
-import { showResourceNotFoundToast } from '~/ui/components/toast-notification';
+import { showResourceNotFoundToast, showToast } from '~/ui/components/toast-notification';
 import { RealtimeResponsePane } from '~/ui/components/websockets/realtime-response-pane';
 import { WebSocketRequestPane } from '~/ui/components/websockets/websocket-request-pane';
-import { INSOMNIA_TAB_HEIGHT } from '~/ui/constant';
 import { useExecutionState } from '~/ui/hooks/use-execution-state';
 import { useFilteredRequests } from '~/ui/hooks/use-filtered-requests';
-import { useInsomniaTab } from '~/ui/hooks/use-insomnia-tab';
 import { useReadyState } from '~/ui/hooks/use-ready-state';
 import {
   type CreateRequestType,
@@ -240,27 +230,7 @@ const RequestTiming = ({ requestId }: { requestId: string }) => {
 };
 
 const DebugEntry = () => {
-  const { organizationId, projectId, workspaceId } = useParams() as {
-    organizationId: string;
-    projectId: string;
-    workspaceId: string;
-    requestId?: string;
-    requestGroupId?: string;
-  };
-  const { activeRequestGroup } = useRequestGroupLoaderData() || {};
-  const { activeWorkspace, activeProject } = useWorkspaceLoaderData()!;
-  const requestData = useRequestLoaderData();
-  const { activeRequest } = requestData || {};
-
-  useInsomniaTab({
-    organizationId,
-    projectId,
-    workspaceId,
-    activeWorkspace,
-    activeProject,
-    activeRequest,
-    activeRequestGroup,
-  });
+  const { activeWorkspace } = useWorkspaceLoaderData()!;
 
   if (activeWorkspace.scope === 'mcp') {
     // MCP request under mcp workspace has different layout so we need to render a different component
@@ -270,13 +240,11 @@ const DebugEntry = () => {
 };
 
 const Debug = () => {
+  type ProviderSelectionId = ProviderId | 'backend';
   const {
     activeWorkspace,
     activeProject,
     activeEnvironment,
-    activeCookieJar,
-    caCertificate,
-    clientCertificates,
     grpcRequests,
     collection: _collection,
   } = useWorkspaceLoaderData()!;
@@ -290,15 +258,13 @@ const Debug = () => {
   const createRequestGroupFetcher = useRequestGroupNewActionFetcher();
 
   const [isPasteCurlModalOpen, setPasteCurlModalOpen] = useState(false);
-  const [pastedCurl, setPastedCurl] = useState('');
 
-  const { organizationId, projectId, workspaceId, requestId, requestGroupId, panel } = useParams() as {
+  const { organizationId, projectId, workspaceId, requestId, requestGroupId } = useParams() as {
     organizationId: string;
     projectId: string;
     workspaceId: string;
     requestId?: string;
     requestGroupId?: string;
-    panel?: string;
   };
 
   const [filter, setFilter] = useLocalStorage<string>(`${workspaceId}:collection-list-filter`);
@@ -314,8 +280,8 @@ const Debug = () => {
   const [isRequestSettingsModalOpen, setIsRequestSettingsModalOpen] = useState(false);
   const [isEnvironmentModalOpen, setEnvironmentModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-  const [isEnvironmentPickerOpen, setIsEnvironmentPickerOpen] = useState(false);
-  const [isCertificatesModalOpen, setCertificatesModalOpen] = useState(false);
+  const [selectedProviderId, setSelectedProviderId] = useState<ProviderSelectionId>('backend');
+  const [runningProviderId, setRunningProviderId] = useState<ProviderId | null>(null);
 
   const patchRequest = useRequestPatcher();
   const patchGroup = useRequestGroupPatcher();
@@ -500,7 +466,6 @@ const Debug = () => {
       });
     },
     environment_showEditor: () => setEnvironmentModalOpen(true),
-    environment_showSwitchMenu: () => setIsEnvironmentPickerOpen(true),
     showCookiesEditor: () => setIsCookieModalOpen(true),
     request_showGenerateCodeEditor: () => {
       if (activeRequest && isRequest(activeRequest)) {
@@ -517,6 +482,209 @@ const Debug = () => {
       isSocketIORequest(activeRequest));
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const runProviderWorkflow = useCallback(
+    async (providerId: ProviderId) => {
+      if (runningProviderId) {
+        showToast({
+          icon: 'circle-info',
+          title: `Provider sync already running for ${getProviderConfig(runningProviderId).label}.`,
+          status: 'warning',
+        });
+        return;
+      }
+
+      setSelectedProviderId(providerId);
+      setRunningProviderId(providerId);
+
+      const providerConfig = getProviderConfig(providerId);
+      showToast({
+        icon: 'globe',
+        title: `${providerConfig.label}: syncing provider access`,
+      });
+
+      try {
+        const getPersistedCookies = window.main.providerAuthInWindow?.getPersistedCookies;
+        let cookies = (await getProviderSession(organizationId, providerId))?.cookies ?? [];
+
+        if (!cookies.length && typeof getPersistedCookies === 'function') {
+          cookies = await getPersistedCookies({
+            providerId,
+            domainFilters: providerConfig.auth.domainFilters,
+          });
+        }
+
+        if (!cookies.length) {
+          const popupResult = await window.main.providerAuthInWindow.start({
+            providerId,
+            loginUrl: providerConfig.auth.loginUrl,
+            successRules: providerConfig.auth.successRules,
+            domainFilters: providerConfig.auth.domainFilters,
+          });
+
+          if (popupResult.status === 'cancelled') {
+            showToast({
+              icon: 'xmark',
+              title: `${providerConfig.label}: login cancelled`,
+              status: 'warning',
+            });
+            return;
+          }
+
+          if (popupResult.status === 'error') {
+            throw new Error(popupResult.error || 'Login failed');
+          }
+
+          cookies = popupResult.cookies || [];
+          if (!cookies.length && typeof getPersistedCookies === 'function') {
+            cookies = await getPersistedCookies({
+              providerId,
+              domainFilters: providerConfig.auth.domainFilters,
+            });
+          }
+        }
+
+        if (!cookies.length) {
+          throw new Error('No cookies were captured for this provider');
+        }
+
+        await saveProviderSession({
+          organizationId,
+          providerId,
+          cookies,
+        });
+
+        const syncResult = await syncProviderCookiesToWorkspace({
+          workspaceId,
+          cookies,
+        });
+
+        const generationResult = await generateOrRefreshProviderRequests({
+          workspaceId,
+          providerId,
+        });
+
+        showToast(
+          {
+            icon: 'check',
+            title: `${providerConfig.label}: ready`,
+            description: `Synced ${syncResult.importedCookieCount} cookies. Generated ${generationResult.created}, updated ${generationResult.updated} direct endpoints.`,
+            status: 'success',
+          },
+          { timeout: 6000 },
+        );
+      } catch (error) {
+        showToast(
+          {
+            icon: 'triangle-exclamation',
+            title: `${providerConfig.label}: setup failed`,
+            description: error instanceof Error ? error.message : String(error),
+            status: 'error',
+          },
+          { timeout: 7000 },
+        );
+      } finally {
+        setRunningProviderId(null);
+      }
+    },
+    [organizationId, runningProviderId, workspaceId],
+  );
+  const providerList = useMemo(
+    () => [{ id: 'backend', label: 'Backend' } as const, ...providerConfigList],
+    [],
+  );
+
+  const scopedCollection = useMemo(() => {
+    const providerExplorerRoot = collection.find(
+      item => isRequestGroup(item.doc) && item.doc.name === 'Provider Explorer' && item.level === 0,
+    );
+
+    const isNodeInsideProviderExplorer = (item: (typeof collection)[number]) =>
+      Boolean(
+        providerExplorerRoot &&
+          (item.doc._id === providerExplorerRoot.doc._id || item.ancestors?.includes(providerExplorerRoot.doc._id)),
+      );
+
+    if (selectedProviderId === 'backend') {
+      return collection.filter(item => !isNodeInsideProviderExplorer(item));
+    }
+
+    if (!providerExplorerRoot || !isRequestGroup(providerExplorerRoot.doc)) {
+      return [];
+    }
+
+    const providerLabel = getProviderConfig(selectedProviderId).label;
+    const selectedProviderFolder = collection.find(
+      item =>
+        isRequestGroup(item.doc) &&
+        item.doc.parentId === providerExplorerRoot.doc._id &&
+        item.doc.name === providerLabel,
+    );
+
+    if (!selectedProviderFolder) {
+      return [];
+    }
+
+    return collection.filter(
+      item =>
+        item.doc._id === selectedProviderFolder.doc._id || item.ancestors?.includes(selectedProviderFolder.doc._id),
+    );
+  }, [collection, selectedProviderId]);
+
+  const openProviderBrowser = useCallback(async () => {
+    if (selectedProviderId === 'backend') {
+      showToast({
+        icon: 'circle-info',
+        title: 'Backend provider does not use popup browser flow.',
+        status: 'warning',
+      });
+      return;
+    }
+    const providerConfig = getProviderConfig(selectedProviderId);
+    try {
+      const result = await window.main.providerAuthInWindow.start({
+        providerId: selectedProviderId,
+        loginUrl: providerConfig.auth.loginUrl,
+        successRules: providerConfig.auth.successRules,
+        domainFilters: providerConfig.auth.domainFilters,
+      });
+
+      if (result.status === 'success' && result.cookies?.length) {
+        await saveProviderSession({
+          organizationId,
+          providerId: selectedProviderId,
+          cookies: result.cookies,
+        });
+      }
+
+      if (result.capturedRequests?.length) {
+        const discovered = await upsertDiscoveredProviderRequests({
+          workspaceId,
+          providerId: selectedProviderId,
+          requests: result.capturedRequests,
+        });
+        showToast({
+          icon: 'globe',
+          title: `${providerConfig.label}: captured ${discovered.total} requests`,
+          description: `Discovered endpoints saved (created ${discovered.created}, updated ${discovered.updated}).`,
+          status: 'success',
+        });
+      } else {
+        showToast({
+          icon: 'circle-info',
+          title: `${providerConfig.label}: no API endpoints discovered`,
+          description: 'Try signing in and navigating API-driven pages, then close the browser window.',
+          status: 'warning',
+        });
+      }
+    } catch (error) {
+      showToast({
+        icon: 'triangle-exclamation',
+        title: `${providerConfig.label}: browser failed to open`,
+        description: error instanceof Error ? error.message : String(error),
+        status: 'error',
+      });
+    }
+  }, [organizationId, selectedProviderId, workspaceId]);
 
   const sortOrder = (searchParams.get('sortOrder') as SortOrder) || 'type-manual';
   const { hotKeyRegistry } = settings;
@@ -551,8 +719,8 @@ const Debug = () => {
       const id = firstKey.toString();
       const targetId = event.target.key.toString();
 
-      const dropItem = collection.find(r => r.doc._id === id);
-      const targetItem = collection.find(r => r.doc._id === targetId);
+      const dropItem = scopedCollection.find(r => r.doc._id === id);
+      const targetItem = scopedCollection.find(r => r.doc._id === targetId);
 
       if (!dropItem || !targetItem) {
         return;
@@ -572,7 +740,7 @@ const Debug = () => {
         // there is no item before we move the item to the beginning
         // If there are children find the first child key and use a lower one
         // otherwise use whatever
-        const children = collection.filter(r => r.doc.parentId === targetId);
+        const children = scopedCollection.filter(r => r.doc.parentId === targetId);
 
         if (children.length > 0) {
           const firstChild = children[0];
@@ -589,7 +757,7 @@ const Debug = () => {
         }
       } else {
         // Everything is going to be moving the item besides the other items
-        const targetSiblingsCollections = collection.filter(r => r.doc.parentId === targetItem.doc.parentId);
+        const targetSiblingsCollections = scopedCollection.filter(r => r.doc.parentId === targetItem.doc.parentId);
         const targetIndexInSiblingsCollection = targetSiblingsCollections.findIndex(r => r.doc._id === targetId);
         if (event.target.dropPosition === 'after') {
           const beforeItem = targetItem;
@@ -749,6 +917,14 @@ const Debug = () => {
               parentId: workspaceId,
             }),
         },
+        {
+          id: 'Browser',
+          name: 'Browser',
+          icon: 'globe',
+          action: () => {
+            void openProviderBrowser();
+          },
+        },
       ],
     },
     {
@@ -772,12 +948,12 @@ const Debug = () => {
     },
   ];
 
-  // const allCollapsed = collection.every(item => item.hidden);
+  // const allCollapsed = scopedCollection.every(item => item.hidden);
   const [allExpanded, setAllExpanded] = useState(false);
 
   const toggleExpandAllFetcher = useToggleExpandAllActionFetcher();
 
-  const visibleCollection = collection.filter(item => !item.hidden);
+  const visibleCollection = scopedCollection.filter(item => !item.hidden);
 
   const parentRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer<HTMLDivElement, Element>({
@@ -812,79 +988,74 @@ const Debug = () => {
   }, [settings.forceVerticalLayout, direction]);
 
   return (
-    <PanelGroup
-      ref={sidebarPanelRef}
-      autoSaveId="insomnia-sidebar"
-      id="wrapper"
-      className="new-sidebar h-full w-full text-(--color-font)"
-      direction="horizontal"
-    >
+    <div className="flex h-full w-full flex-col text-(--color-font)">
+      {/* Top bar: provider dropdown + URL */}
+      <div className="flex h-[41px] shrink-0 items-center gap-2 border-b border-solid border-(--hl-md) px-2">
+        <Select
+          aria-label="Provider"
+          className="shrink-0"
+          selectedKey={selectedProviderId}
+          onSelectionChange={key => {
+            const id = key as ProviderSelectionId;
+            if (id === 'backend') {
+              setSelectedProviderId('backend');
+            } else {
+              setSelectedProviderId(id);
+              void runProviderWorkflow(id);
+            }
+          }}
+        >
+          <Button className="flex h-7 items-center gap-1 rounded-xs px-2 text-sm text-(--color-font) ring-1 ring-(--hl-sm) transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md)">
+            <Icon icon={selectedProviderId === 'backend' ? 'server' : 'store'} className="w-4" />
+            <span>{providerList.find(p => p.id === selectedProviderId)?.label ?? 'Provider'}</span>
+            {runningProviderId ? (
+              <Icon icon="spinner" className="animate-spin text-xs" />
+            ) : (
+              <Icon icon="caret-down" className="text-xs" />
+            )}
+          </Button>
+          <Popover className="flex min-w-max flex-col overflow-y-hidden">
+            <ListBox
+              items={providerList.map(p => ({ id: p.id, name: p.label }))}
+              className="min-w-max overflow-y-auto rounded-md border border-solid border-(--hl-sm) bg-(--color-bg) py-2 text-sm shadow-lg select-none focus:outline-hidden"
+            >
+              {item => (
+                <ListBoxItem
+                  id={item.id}
+                  key={item.id}
+                  className="flex h-(--line-height-xs) w-full items-center gap-2 bg-transparent px-(--padding-md) whitespace-nowrap text-(--color-font) transition-colors hover:bg-(--hl-sm) focus:bg-(--hl-xs) focus:outline-hidden aria-selected:font-bold"
+                  textValue={item.name}
+                >
+                  {({ isSelected }) => (
+                    <Fragment>
+                      <Icon icon={item.id === 'backend' ? 'server' : 'store'} className="w-4" />
+                      <span>{item.name}</span>
+                      {isSelected && <Icon icon="check" className="ml-auto text-(--color-success)" />}
+                    </Fragment>
+                  )}
+                </ListBoxItem>
+              )}
+            </ListBox>
+          </Popover>
+        </Select>
+        <div className="min-w-0 flex-1 truncate text-sm text-(--color-font-secondary)" title={activeRequest?.url}>
+          {activeRequest?.url || 'No request selected'}
+        </div>
+        {activeRequest && isRequestId(requestId) && (
+          <ErrorBoundary errorClassName="font-error pad text-center">
+            <RequestUrlBar key={requestId} />
+          </ErrorBoundary>
+        )}
+      </div>
+      <PanelGroup
+        ref={sidebarPanelRef}
+        autoSaveId="insomnia-sidebar"
+        id="wrapper"
+        className="new-sidebar flex-1"
+        direction="horizontal"
+      >
       <Panel id="sidebar" className="sidebar theme--sidebar" maxSize={40} minSize={10} collapsible>
         <div className="flex flex-1 flex-col divide-y divide-solid divide-(--hl-md) overflow-hidden">
-          <div className="flex flex-col items-start divide-y divide-solid divide-(--hl-md)">
-            <div className={`flex w-full h-[${INSOMNIA_TAB_HEIGHT}px]`}>
-              <Breadcrumbs className="m-0 flex h-full w-full list-none items-center gap-2 px-(--padding-sm) font-bold">
-                <Breadcrumb className="flex h-full items-center gap-2 text-(--color-font) outline-hidden select-none data-focused:outline-hidden">
-                  <NavLink
-                    data-testid="project"
-                    className="flex aspect-square h-7 shrink-0 items-center justify-center gap-2 rounded-xs px-1 py-1 text-sm text-(--color-font) ring-1 ring-transparent outline-hidden transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) focus:ring-inset aria-pressed:bg-(--hl-sm) data-focused:outline-hidden"
-                    to={`/organization/${organizationId}/project/${activeProject._id}`}
-                  >
-                    <Icon className="text-xs" icon="chevron-left" />
-                  </NavLink>
-                  <span aria-hidden role="separator" className="h-4 text-(--hl-lg) outline-1 outline-solid" />
-                </Breadcrumb>
-                <Breadcrumb className="flex h-full items-center gap-2 truncate text-(--color-font) outline-hidden select-none data-focused:outline-hidden">
-                  <WorkspaceDropdown />
-                </Breadcrumb>
-                <Breadcrumb className="mr-2.5 ml-auto flex h-full items-center gap-2 justify-self-end truncate text-sm text-(--color-font) outline-hidden select-none data-focused:outline-hidden">
-                  <NavLink
-                    data-testid="run-collection-btn-quick"
-                    className="flex h-7 shrink-0 items-center justify-center gap-2 rounded-xs px-2 py-1 text-sm text-(--color-font) ring-1 ring-transparent outline-hidden transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) focus:ring-inset aria-pressed:bg-(--hl-sm) aria-[current]:hidden data-focused:outline-hidden"
-                    to={`/organization/${organizationId}/project/${activeWorkspace.parentId}/workspace/${activeWorkspace._id}/debug/runner?folder=`}
-                  >
-                    <Icon icon="play" />
-                    <span className="truncate">Run</span>
-                  </NavLink>
-                </Breadcrumb>
-              </Breadcrumbs>
-            </div>
-            {isDesign(activeWorkspace) && (
-              <DocumentTab organizationId={organizationId} projectId={projectId} workspaceId={workspaceId} />
-            )}
-            <div className="flex w-full flex-col items-start gap-2 p-(--padding-sm)">
-              <div className="flex w-full items-center justify-between gap-2">
-                <EnvironmentPicker
-                  isOpen={isEnvironmentPickerOpen}
-                  onOpenChange={setIsEnvironmentPickerOpen}
-                  onOpenEnvironmentSettingsModal={() => setEnvironmentModalOpen(true)}
-                />
-              </div>
-              <Button
-                onPress={() => setIsCookieModalOpen(true)}
-                className="flex max-w-full flex-1 items-center justify-center gap-2 truncate rounded-xs px-4 py-1 text-sm text-(--color-font) ring-1 ring-transparent transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) focus:ring-inset aria-pressed:bg-(--hl-sm)"
-              >
-                <Icon icon="cookie-bite" className="w-5 shrink-0" />
-                <span className="truncate">
-                  {activeCookieJar.cookies.length === 0 ? 'Add' : 'Manage'} Cookies{' '}
-                  {activeCookieJar.cookies.length > 0 ? `(${activeCookieJar.cookies.length})` : ''}
-                </span>
-              </Button>
-              <Button
-                onPress={() => setCertificatesModalOpen(true)}
-                className="flex max-w-full flex-1 items-center justify-center gap-2 truncate rounded-xs px-4 py-1 text-sm text-(--color-font) ring-1 ring-transparent transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) focus:ring-inset aria-pressed:bg-(--hl-sm)"
-              >
-                <Icon icon="file-contract" className="w-5 shrink-0" />
-                <span className="truncate">
-                  {clientCertificates.length === 0 || caCertificate ? 'Add' : 'Manage'} Certificates{' '}
-                  {[...clientCertificates, caCertificate].filter(cert => !cert?.disabled).filter(isNotNullOrUndefined)
-                    .length > 0
-                    ? `(${[...clientCertificates, caCertificate].filter(cert => !cert?.disabled).filter(isNotNullOrUndefined).length})`
-                    : ''}
-                </span>
-              </Button>
-            </div>
-          </div>
           <div className="flex flex-1 flex-col overflow-hidden">
             <div className="flex justify-between gap-1 p-(--padding-sm)">
               <SearchField
@@ -1038,7 +1209,7 @@ const Debug = () => {
             <GridList
               id="sidebar-pinned-request-gridlist"
               className="max-h-[50%] overflow-y-auto border-t border-b border-solid border-(--hl-sm) py-(--padding-sm) data-empty:border-none data-empty:py-0"
-              items={collection.filter(item => item.pinned)}
+              items={scopedCollection.filter(item => item.pinned)}
               aria-label="Pinned Requests"
               disallowEmptySelection
               selectedKeys={requestId ? [requestId] : []}
@@ -1133,7 +1304,7 @@ const Debug = () => {
                 onAction={key => {
                   const id = key.toString();
                   if (isRequestGroupId(id)) {
-                    const item = collection.find(i => i.doc._id === id);
+                    const item = scopedCollection.find(i => i.doc._id === id);
                     if (item) {
                       groupMetaPatcher(item.doc._id, { collapsed: !item.collapsed });
                       navigate(
@@ -1185,8 +1356,6 @@ const Debug = () => {
             </div>
           </div>
 
-          {isScratchpadOrganizationId(organizationId) && <ScratchPadTutorialPanel />}
-
           <WorkspaceSyncDropdown />
           {isEnvironmentModalOpen && <WorkspaceEnvironmentsEditModal onClose={() => setEnvironmentModalOpen(false)} />}
           {isImportModalOpen && (
@@ -1201,7 +1370,6 @@ const Debug = () => {
             />
           )}
           {isCookieModalOpen && <CookiesModal setIsOpen={setIsCookieModalOpen} />}
-          {isCertificatesModalOpen && <CertificatesModal onClose={() => setCertificatesModalOpen(false)} />}
           {isPasteCurlModalOpen && (
             <PasteCurlModal
               onImport={req => {
@@ -1211,7 +1379,7 @@ const Debug = () => {
                   req,
                 });
               }}
-              defaultValue={pastedCurl}
+              defaultValue=""
               onHide={() => setPasteCurlModalOpen(false)}
             />
           )}
@@ -1219,8 +1387,6 @@ const Debug = () => {
       </Panel>
       <PanelResizeHandle className="h-full w-px bg-(--hl-md)" />
       <Panel className="flex flex-col">
-        {/* Hide tabs when it's on the tutorial panel */}
-        {!panel && <OrganizationTabList currentPage="debug" />}
         <PanelGroup autoSaveId="insomnia-panels" id="insomnia-panels" direction={direction}>
           <Routes>
             <RouteComponent
@@ -1245,10 +1411,6 @@ const Debug = () => {
                           <RequestPane
                             environmentId={activeEnvironment ? activeEnvironment._id : ''}
                             settings={settings}
-                            onPaste={text => {
-                              setPastedCurl(text);
-                              setPasteCurlModalOpen(true);
-                            }}
                           />
                         )}
                         {Boolean(!requestId && !requestGroupId) && <PlaceholderRequestPane />}
@@ -1283,116 +1445,15 @@ const Debug = () => {
               }
             />
             <RouteComponent path="runner" element={<Runner />} />
-            <RouteComponent path="tutorial/:panel" element={<Tutorial />} />
           </Routes>
         </PanelGroup>
       </Panel>
     </PanelGroup>
+    </div>
   );
 };
 
 export default DebugEntry;
-
-const ScratchPadTutorialPanel = () => {
-  const [signUpTipDismissedState, setSignUpTipDismissedState] = useLocalStorage<{
-    dismissed: boolean;
-    dismissedAt: number;
-  }>('scratchpad-sign-up-tip-dismissed', { dismissed: false, dismissedAt: 0 });
-
-  const [currentTime] = useState(() => Date.now());
-
-  const handleDismiss = () => {
-    setSignUpTipDismissedState({ dismissed: true, dismissedAt: Date.now() });
-  };
-
-  const {
-    organizationId,
-    projectId,
-    workspaceId,
-    panel = 'all',
-  } = useParams() as {
-    organizationId: string;
-    projectId: string;
-    workspaceId: string;
-    panel?: string;
-  };
-
-  const navigate = useNavigate();
-  const handleSignUp = () => {
-    navigate(href('/auth/login'));
-  };
-
-  const shouldShowSignUpTip = useMemo(() => {
-    if (!signUpTipDismissedState || !signUpTipDismissedState.dismissed) {
-      return true;
-    }
-
-    const twoWeeksInMs = 14 * 24 * 60 * 60 * 1000;
-
-    return currentTime - signUpTipDismissedState.dismissedAt >= twoWeeksInMs;
-  }, [signUpTipDismissedState, currentTime]);
-
-  return (
-    <>
-      {shouldShowSignUpTip ? (
-        <div className="m-2 rounded-lg border! border-solid border-(--hl-sm) bg-(--color-bg) p-4">
-          <div className="flex flex-col items-start justify-between">
-            <div className="flex w-full justify-between">
-              <h3 className="mb-2 text-lg font-semibold text-(--color-font)">Unlock full features</h3>
-              <Button
-                onPress={handleDismiss}
-                className="ml-4 flex h-6 w-6 items-center justify-center rounded-xs text-(--color-font-secondary) transition-colors hover:bg-(--hl-xs) hover:text-(--color-font) focus:outline-hidden"
-                aria-label="Dismiss tutorial"
-              >
-                <Icon icon="times" className="h-3 w-3" />
-              </Button>
-            </div>
-            <p className="mb-4 text-sm text-(--color-font-secondary)">
-              Create multiple collections, design APIs, MCP clients, manage projects, and collaborate with your team.
-            </p>
-            <Button
-              onPress={handleSignUp}
-              className="rounded-md bg-(--color-surprise) px-4 py-2 text-sm font-medium text-white transition-colors"
-            >
-              Sign up for free
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      <GridList
-        aria-label="Scope filter"
-        items={scratchPadTutorialList}
-        className="shrink-0 overflow-y-auto py-(--padding-sm) data-empty:py-0"
-        disallowEmptySelection
-        selectedKeys={[panel]}
-        selectionMode="single"
-        onSelectionChange={keys => {
-          if (keys !== 'all') {
-            const selected = Array.from(keys.values())[0].toString();
-            navigate(
-              `/organization/${organizationId}/project/${projectId}/workspace/${workspaceId}/debug/tutorial/${selected}`,
-            );
-          }
-        }}
-      >
-        {item => {
-          return (
-            <GridListItem textValue={item.title} className="group outline-hidden select-none">
-              <div className="relative flex h-12 w-full items-center gap-2 overflow-hidden px-4 text-(--hl) outline-hidden transition-colors select-none group-hover:bg-(--hl-xs) group-focus:bg-(--hl-sm) group-aria-selected:bg-(--hl-sm) group-aria-selected:text-(--color-font)">
-                <span className="flex h-6 w-6 items-center justify-center">
-                  <Icon icon={item.icon} className="w-6" />
-                </span>
-
-                <span className="truncate">{item.title}</span>
-              </div>
-            </GridListItem>
-          );
-        }}
-      </GridList>
-    </>
-  );
-};
 
 const CollectionGridListItem = ({
   label,

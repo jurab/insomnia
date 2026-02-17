@@ -25,7 +25,6 @@ import { useSyncOrganizationsAndProjectsActionFetcher } from '~/routes/organizat
 import { useUntrackedProjectsLoaderFetcher } from '~/routes/untracked-projects';
 import { getLoginUrl } from '~/ui/auth-session-provider.client';
 import { CommandPalette } from '~/ui/components/command-palette';
-import { GitHubStarsButton } from '~/ui/components/github-stars-button';
 import { HeaderInviteButton } from '~/ui/components/header-invite-button';
 import { HeaderPlanIndicator } from '~/ui/components/header-plan-indicator';
 import { HeaderUserButton } from '~/ui/components/header-user-button';
@@ -268,7 +267,6 @@ const Component = ({ loaderData }: Route.ComponentProps) => {
                   <div className="flex w-[50px] shrink-0 justify-center py-2">
                     <InsomniaLogo />
                   </div>
-                  {!user ? <GitHubStarsButton /> : null}
                 </div>
                 <CommandPalette />
                 <div className="flex min-w-min items-center justify-end gap-(--padding-sm) space-x-3 p-2">
@@ -283,20 +281,12 @@ const Component = ({ loaderData }: Route.ComponentProps) => {
                       <HeaderUserButton user={user} currentPlan={currentPlan} isMinimal={isMinimal} />
                     </Fragment>
                   ) : (
-                    <Fragment>
-                      <NavLink
-                        to={href('/auth/login')}
-                        className="flex items-center justify-center gap-2 rounded-xs border border-solid border-(--hl-md) px-4 py-1 text-sm font-semibold text-(--color-font) ring-1 ring-transparent transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) focus:ring-inset aria-pressed:bg-(--hl-sm)"
-                      >
-                        Login
-                      </NavLink>
-                      <NavLink
-                        className="flex items-center justify-center gap-2 rounded-xs bg-(--color-surprise) px-4 py-1 text-sm font-semibold text-(--color-font-surprise) ring-1 ring-transparent transition-all focus:bg-[rgba(var(--color-surprise-rgb),0.9)] focus:ring-(--hl-md) focus:ring-inset aria-pressed:bg-[rgba(var(--color-surprise-rgb),0.8)]"
-                        to={href('/auth/login')}
-                      >
-                        Sign up for free
-                      </NavLink>
-                    </Fragment>
+                    <NavLink
+                      to={href('/auth/login')}
+                      className="flex items-center justify-center gap-2 rounded-xs border border-solid border-(--hl-md) px-4 py-1 text-sm font-semibold text-(--color-font) ring-1 ring-transparent transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) focus:ring-inset aria-pressed:bg-(--hl-sm)"
+                    >
+                      Login / Sign up
+                    </NavLink>
                   )}
                 </div>
               </header>
@@ -601,20 +591,12 @@ const Component = ({ loaderData }: Route.ComponentProps) => {
                           <HeaderUserButton user={user} currentPlan={currentPlan} isMinimal={isMinimal} />
                         </Fragment>
                       ) : (
-                        <Fragment>
-                          <NavLink
-                            to={href('/auth/login')}
-                            className="flex items-center justify-center gap-2 rounded-xs border border-solid border-(--hl-md) px-4 py-1 text-sm font-semibold text-(--color-font) ring-1 ring-transparent transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) focus:ring-inset aria-pressed:bg-(--hl-sm)"
-                          >
-                            Login
-                          </NavLink>
-                          <NavLink
-                            className="flex items-center justify-center gap-2 rounded-xs bg-(--color-surprise) px-4 py-1 text-sm font-semibold text-(--color-font-surprise) ring-1 ring-transparent transition-all focus:bg-[rgba(var(--color-surprise-rgb),0.9)] focus:ring-(--hl-md) focus:ring-inset aria-pressed:bg-[rgba(var(--color-surprise-rgb),0.8)]"
-                            to={href('/auth/login')}
-                          >
-                            Sign up for free
-                          </NavLink>
-                        </Fragment>
+                        <NavLink
+                          to={href('/auth/login')}
+                          className="flex items-center justify-center gap-2 rounded-xs border border-solid border-(--hl-md) px-4 py-1 text-sm font-semibold text-(--color-font) ring-1 ring-transparent transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) focus:ring-inset aria-pressed:bg-(--hl-sm)"
+                        >
+                          Login / Sign up
+                        </NavLink>
                       )}
                     </div>
                   )}

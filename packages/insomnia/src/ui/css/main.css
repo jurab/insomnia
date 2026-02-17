@@ -2994,6 +2994,7 @@ input.editable {
 }
 .request-pane {
   height: 100%;
+  grid-template-rows: minmax(0, 1fr);
 }
 .request-pane .request-pane__shortcuts-table {
   color: var(--hl-xl);

@@ -176,6 +176,10 @@ const main: Window['main'] = {
   backup: () => ipcRenderer.invoke('backup'),
   restoreBackup: options => ipcRenderer.invoke('restoreBackup', options),
   authorizeUserInWindow: options => ipcRenderer.invoke('authorizeUserInWindow', options),
+  providerAuthInWindow: {
+    start: options => ipcRenderer.invoke('providerAuthInWindow.start', options),
+    getPersistedCookies: options => ipcRenderer.invoke('providerAuthInWindow.getPersistedCookies', options),
+  },
   authorizeUserInDefaultBrowser: options => ipcRenderer.invoke('authorizeUserInDefaultBrowser', options),
   onDefaultBrowserOAuthRedirect: options => ipcRenderer.invoke('onDefaultBrowserOAuthRedirect', options),
   cancelAuthorizationInDefaultBrowser: options => ipcRenderer.invoke('cancelAuthorizationInDefaultBrowser', options),

@@ -1,4 +1,4 @@
-import React, { type FC, Fragment, useRef, useState } from 'react';
+import React, { type FC, Fragment, useState } from 'react';
 import { Button, Heading, Tab, TabList, TabPanel, Tabs, ToggleButton } from 'react-aria-components';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { useParams } from 'react-router';
@@ -7,8 +7,6 @@ import * as reactUse from 'react-use';
 import { OneLineEditor } from '~/ui/components/.client/codemirror/one-line-editor';
 
 import { getContentTypeFromHeaders } from '../../../common/constants';
-import * as models from '../../../models';
-import { queryAllWorkspaceUrls } from '../../../models/helpers/query-all-workspace-urls';
 import { getCombinedPathParametersFromUrl, type RequestParameter } from '../../../models/request';
 import type { Settings } from '../../../models/settings';
 import { getAuthObjectOrNull } from '../../../network/authentication';
@@ -30,25 +28,22 @@ import { Icon } from '../icon';
 import { MarkdownEditor } from '../markdown-editor';
 import { RequestSettingsModal } from '../modals/request-settings-modal';
 import { RenderedQueryString } from '../rendered-query-string';
-import { RequestUrlBar, type RequestUrlBarHandle } from '../request-url-bar';
-import { Pane, PaneHeader } from './pane';
+import { Pane } from './pane';
 import { PlaceholderRequestPane } from './placeholder-request-pane';
 
 interface Props {
   environmentId: string;
   settings: Settings;
-  onPaste: (text: string) => void;
 }
 
-export const RequestPane: FC<Props> = ({ environmentId, settings, onPaste }) => {
+export const RequestPane: FC<Props> = ({ environmentId, settings }) => {
   const { activeRequest, activeRequestMeta } = useRequestLoaderData() as RequestLoaderData;
-  const { workspaceId, requestId } = useParams() as { workspaceId: string; requestId: string };
+  const { requestId } = useParams() as { requestId: string };
 
   const patchSettings = useSettingsPatcher();
   const [isRequestSettingsModalOpen, setIsRequestSettingsModalOpen] = useState(false);
   const patchRequest = useRequestPatcher();
 
-  const requestUrlBarRef = useRef<RequestUrlBarHandle>(null);
   const [dismissPathParameterTip, setDismissPathParameterTip] = reactUse.useLocalStorage('dismissPathParameterTip', '');
   const handleImportQueryFromUrl = () => {
     let query;
@@ -67,11 +62,6 @@ export const RequestPane: FC<Props> = ({ environmentId, settings, onPaste }) => 
     // Only update if url changed
     if (url !== activeRequest.url) {
       patchRequest(requestId, { url, parameters });
-      /**
-       * Currently the OneLineEditor is a uncontrolled component, and the value is asynchronously, if we change the component to controlled, users need to wait for the value to be updated when inputting, that's not a good experience.
-       * So as a workaround, we need to manually update the url bar value.
-       */
-      requestUrlBarRef.current?.setUrl(url);
     }
   };
   const gitVersion = useGitVCSVersion();
@@ -99,18 +89,6 @@ export const RequestPane: FC<Props> = ({ environmentId, settings, onPaste }) => 
 
   return (
     <Pane type="request">
-      <PaneHeader>
-        <ErrorBoundary errorClassName="font-error pad text-center">
-          <RequestUrlBar
-            key={requestId}
-            uniquenessKey={uniqueKey}
-            handleAutocompleteUrls={() => queryAllWorkspaceUrls(workspaceId, models.request.type, requestId)}
-            nunjucksPowerUserMode={settings.nunjucksPowerUserMode}
-            onPaste={onPaste}
-            ref={requestUrlBarRef}
-          />
-        </ErrorBoundary>
-      </PaneHeader>
       <Tabs aria-label="Request pane tabs" className="flex h-full w-full flex-1 flex-col">
         <TabList
           className="scrollbar-thin flex h-(--line-height-sm) w-full shrink-0 items-center overflow-x-auto border-b border-solid border-b-(--hl-md) bg-(--color-bg)"

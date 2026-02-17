@@ -13,6 +13,7 @@ export type AllTypes =
   | 'MockServer'
   | 'OAuth2Token'
   | 'PluginData'
+  | 'ProviderSession'
   | 'Project'
   | 'ProtoDirectory'
   | 'ProtoFile'

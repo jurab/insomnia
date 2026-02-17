@@ -112,6 +112,8 @@ export type HandleChannels =
   | 'open-channel-to-hidden-browser-window'
   | 'openPath'
   | 'parseImport'
+  | 'providerAuthInWindow.start'
+  | 'providerAuthInWindow.getPersistedCookies'
   | 'readCurlResponse'
   | 'readDir'
   | 'readOrCreateDataDir'

@@ -198,7 +198,8 @@ export function createWindow(): ElectronBrowserWindow {
     x: isVisibleOnAnyDisplay ? x : undefined,
     y: isVisibleOnAnyDisplay ? y : undefined,
     // Other options
-    backgroundColor: '#2C2C2C',
+    show: false, // Don't show until ready
+    backgroundColor: '#000000', // Hyper theme black
     fullscreen: fullscreen,
     fullscreenable: true,
     title: getProductName(),
@@ -225,6 +226,11 @@ export function createWindow(): ElectronBrowserWindow {
   if (maximize) {
     mainBrowserWindow.maximize();
   }
+
+  // Show window once content is ready
+  mainBrowserWindow.once('ready-to-show', () => {
+    mainBrowserWindow.show();
+  });
 
   mainBrowserWindow.on('resize', () => saveBounds());
   mainBrowserWindow.on('maximize', () => saveBounds());
@@ -350,6 +356,19 @@ export function createWindow(): ElectronBrowserWindow {
   const viewMenu: MenuItemConstructorOptions = {
     label: `${MNEMONIC_SYM}View`,
     submenu: [
+      {
+        label: `${MNEMONIC_SYM}Reload`,
+        accelerator: 'CmdOrCtrl+R',
+        click: () => {
+          const window = BrowserWindow.getFocusedWindow();
+          if (window) {
+            window.webContents.reloadIgnoringCache();
+          }
+        },
+      },
+      {
+        type: 'separator',
+      },
       {
         label: `Toggle ${MNEMONIC_SYM}Full Screen`,
         role: 'togglefullscreen',

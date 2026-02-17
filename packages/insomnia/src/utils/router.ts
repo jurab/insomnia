@@ -98,8 +98,6 @@ export const getInitialEntry = async () => {
       });
     }
 
-    const hasUserLoggedInBefore = window.localStorage.getItem('hasUserLoggedInBefore');
-
     const user = await models.userSession.getOrCreate();
     if (user.id) {
       const organizations = JSON.parse(
@@ -128,10 +126,6 @@ export const getInitialEntry = async () => {
           asyncTaskList: [AsyncTask.SyncOrganization, AsyncTask.MigrateProjects, AsyncTask.SyncProjects],
         },
       };
-    }
-
-    if (hasUserLoggedInBefore) {
-      return href('/auth/login');
     }
 
     return href('/organization/:organizationId/project/:projectId/workspace/:workspaceId/debug', {

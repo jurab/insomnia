@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button, Link } from 'react-aria-components';
 import { useParams, useSearchParams } from 'react-router';
 import * as reactUse from 'react-use';
@@ -12,7 +12,6 @@ import {
   type SendActionParams,
   useDebugRequestSendActionFetcher,
 } from '~/routes/organization.$organizationId.project.$projectId.workspace.$workspaceId.debug.request.$requestId.send';
-import { OneLineEditor, type OneLineEditorHandle } from '~/ui/components/.client/codemirror/one-line-editor';
 import { showSettingsModal } from '~/ui/components/modals/settings-modal';
 
 import { database as db } from '../../common/database';
@@ -31,11 +30,10 @@ import { tryToInterpolateRequestOrShowRenderErrorModal } from '../../utils/try-i
 import { buildQueryStringFromParams, joinUrlAndQueryString } from '../../utils/url/querystring';
 import { useInsomniaTabContext } from '../context/app/insomnia-tab-context';
 import { useReadyState } from '../hooks/use-ready-state';
-import { useRequestMetaPatcher, useRequestPatcher } from '../hooks/use-request';
+import { useRequestMetaPatcher } from '../hooks/use-request';
 import { useTimeoutWhen } from '../hooks/use-timeout-when';
 import { Dropdown, type DropdownHandle, DropdownItem, DropdownSection, ItemContent } from './base/dropdown';
-import { MethodDropdown } from './dropdowns/method-dropdown';
-import { createKeybindingsHandler, useDocBodyKeyboardShortcuts } from './keydown-binder';
+import { useDocBodyKeyboardShortcuts } from './keydown-binder';
 import { showModal } from './modals';
 import { AlertModal } from './modals/alert-modal';
 import { GenerateCodeModal } from './modals/generate-code-modal';
@@ -43,20 +41,7 @@ import { InputVaultKeyModal } from './modals/input-vault-key-modal';
 import { PromptModal } from './modals/prompt-modal';
 import { VariableMissingErrorModal } from './modals/variable-missing-error-modal';
 
-interface Props {
-  handleAutocompleteUrls: () => Promise<string[]>;
-  nunjucksPowerUserMode: boolean;
-  uniquenessKey: string;
-  onPaste: (text: string) => void;
-}
-
-export interface RequestUrlBarHandle {
-  focusInput: () => void;
-  setUrl: (url: string) => void;
-}
-
-export const RequestUrlBar = forwardRef<RequestUrlBarHandle, Props>(
-  ({ handleAutocompleteUrls, uniquenessKey, onPaste }, ref) => {
+export const RequestUrlBar = () => {
     const [searchParams, setSearchParams] = useSearchParams();
     const { userSession } = useRootLoaderData()!;
     const { vaultKey } = userSession;
@@ -115,28 +100,9 @@ export const RequestUrlBar = forwardRef<RequestUrlBarHandle, Props>(
       activeRequestMeta: { downloadPath },
     } = useRequestLoaderData()! as RequestLoaderData;
     const patchRequestMeta = useRequestMetaPatcher();
-    const methodDropdownRef = useRef<DropdownHandle>(null);
     const dropdownRef = useRef<DropdownHandle>(null);
-    const inputRef = useRef<OneLineEditorHandle>(null);
     const isRealtimeRequest =
       activeRequest && (isEventStreamRequest(activeRequest) || isGraphqlSubscriptionRequest(activeRequest));
-
-    const focusInput = useCallback(() => {
-      if (inputRef.current) {
-        inputRef.current.focusEnd();
-      }
-    }, [inputRef]);
-
-    const setUrl = useCallback(
-      (url: string) => {
-        if (inputRef.current) {
-          inputRef.current.setValue(url);
-        }
-      },
-      [inputRef],
-    );
-
-    useImperativeHandle(ref, () => ({ focusInput, setUrl }), [focusInput, setUrl]);
 
     const [currentInterval, setCurrentInterval] = useState<number | null>(null);
     const [currentTimeout, setCurrentTimeout] = useState<number | undefined>();
@@ -262,20 +228,16 @@ export const RequestUrlBar = forwardRef<RequestUrlBarHandle, Props>(
       currentInterval && connectRequestFetcher.state === 'idle' ? currentInterval : null,
     );
     useTimeoutWhen(sendOrConnect, currentTimeout, !!currentTimeout);
-    const patchRequest = useRequestPatcher();
 
     useDocBodyKeyboardShortcuts({
-      request_focusUrl: () => {
-        inputRef.current?.focusEnd();
-        inputRef.current?.selectAll();
-      },
+      request_focusUrl: () => {},
       request_send: () => {
         if (activeRequest.url) {
           sendOrConnect();
         }
       },
       request_toggleHttpMethodMenu: () => {
-        methodDropdownRef.current?.toggle();
+        // Request method is fixed in this workflow.
       },
       request_showOptions: () => {
         dropdownRef.current?.toggle(true);
@@ -284,81 +246,57 @@ export const RequestUrlBar = forwardRef<RequestUrlBarHandle, Props>(
 
     const buttonText = isRealtimeRequest ? 'Connect' : downloadPath ? 'Download' : 'Send';
     const borderRadius = isRealtimeRequest ? 'rounded-xs' : 'rounded-l-sm';
-    const { url, method } = activeRequest;
     const isEventStreamOpen = useReadyState({ requestId: activeRequest._id, protocol: 'curl' });
     const isGraphQLSubscriptionOpen = useReadyState({ requestId: activeRequest._id, protocol: 'webSocket' });
     const isCancellable = currentInterval || currentTimeout || isEventStreamOpen || isGraphQLSubscriptionOpen;
     return (
-      <div className="flex w-full items-stretch justify-between self-stretch">
-        <div className="flex items-center">
-          <MethodDropdown
-            ref={methodDropdownRef}
-            onChange={method => patchRequest(requestId, { method })}
-            method={method}
-          />
-        </div>
-        <div className="flex flex-1 items-center p-1">
-          <OneLineEditor
-            id="request-url-bar"
-            key={uniquenessKey}
-            ref={inputRef}
-            type="text"
-            getAutocompleteConstants={handleAutocompleteUrls}
-            placeholder="https://api.myproduct.com/v1/users"
-            defaultValue={url}
-            onChange={url => patchRequest(requestId, { url })}
-            onKeyDown={createKeybindingsHandler({
-              Enter: () => sendOrConnect(),
-            })}
-            onPaste={onPaste}
-          />
-          <div className="flex self-stretch">
-            {isCancellable ? (
-              <button
-                type="button"
-                className="rounded-xs bg-(--color-surprise) px-(--padding-md) text-(--color-font-surprise)"
-                onClick={() => {
-                  if (isEventStreamRequest(activeRequest)) {
-                    window.main.curl.close({ requestId: activeRequest._id });
-                    return;
-                  }
-                  if (isGraphqlSubscriptionRequest(activeRequest)) {
-                    window.main.webSocket.close({ requestId: activeRequest._id });
-                  }
-                  setCurrentInterval(null);
-                  setCurrentTimeout(undefined);
-                }}
-              >
-                {isRealtimeRequest ? 'Disconnect' : 'Cancel'}
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => sendOrConnect()}
-                  className={`bg-(--color-surprise) px-(--padding-md) text-(--color-font-surprise) ${borderRadius}`}
-                  type="button"
-                >
-                  {buttonText}
-                </button>
-                {isRealtimeRequest ? null : (
-                  <Dropdown
-                    key="dropdown"
-                    className="flex"
-                    ref={dropdownRef}
-                    aria-label="Request Options"
-                    closeOnSelect={false}
-                    triggerButton={
-                      <Button
-                        className="rounded-r-sm bg-(--color-surprise) px-1 text-(--color-font-surprise)"
-                        style={{
-                          borderTopRightRadius: '0.125rem',
-                          borderBottomRightRadius: '0.125rem',
-                        }}
-                      >
-                        <i className="fa fa-caret-down" />
-                      </Button>
-                    }
+      <div className="flex items-center self-stretch">
+        {isCancellable ? (
+          <button
+            type="button"
+            className="rounded-xs bg-(--color-surprise) px-(--padding-md) text-(--color-font-surprise)"
+            onClick={() => {
+              if (isEventStreamRequest(activeRequest)) {
+                window.main.curl.close({ requestId: activeRequest._id });
+                return;
+              }
+              if (isGraphqlSubscriptionRequest(activeRequest)) {
+                window.main.webSocket.close({ requestId: activeRequest._id });
+              }
+              setCurrentInterval(null);
+              setCurrentTimeout(undefined);
+            }}
+          >
+            {isRealtimeRequest ? 'Disconnect' : 'Cancel'}
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={() => sendOrConnect()}
+              className={`bg-(--color-surprise) px-(--padding-md) text-(--color-font-surprise) ${borderRadius}`}
+              type="button"
+            >
+              {buttonText}
+            </button>
+            {isRealtimeRequest ? null : (
+              <Dropdown
+                key="dropdown"
+                className="flex"
+                ref={dropdownRef}
+                aria-label="Request Options"
+                closeOnSelect={false}
+                triggerButton={
+                  <Button
+                    className="rounded-r-sm bg-(--color-surprise) px-1 text-(--color-font-surprise)"
+                    style={{
+                      borderTopRightRadius: '0.125rem',
+                      borderBottomRightRadius: '0.125rem',
+                    }}
                   >
+                    <i className="fa fa-caret-down" />
+                  </Button>
+                }
+              >
                     <DropdownSection aria-label="Basic Section" title="Basic">
                       <DropdownItem aria-label="send-now">
                         <ItemContent
@@ -445,12 +383,10 @@ export const RequestUrlBar = forwardRef<RequestUrlBarHandle, Props>(
                         <ItemContent icon="download" label="Send And Download" onClick={() => sendOrConnect(true)} />
                       </DropdownItem>
                     </DropdownSection>
-                  </Dropdown>
-                )}
-              </>
+              </Dropdown>
             )}
-          </div>
-        </div>
+          </>
+        )}
         <VariableMissingErrorModal
           isOpen={showEnvVariableMissingModal}
           title={
@@ -518,7 +454,4 @@ export const RequestUrlBar = forwardRef<RequestUrlBarHandle, Props>(
         {showInputVaultKeyModal && <InputVaultKeyModal onClose={() => setShowInputVaultKeyModal(false)} />}
       </div>
     );
-  },
-);
-
-RequestUrlBar.displayName = 'RequestUrlBar';
+};

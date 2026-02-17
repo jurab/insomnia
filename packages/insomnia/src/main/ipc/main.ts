@@ -41,6 +41,7 @@ import {
 import { authorizeUserInWindow } from '../authorize-user-in-window';
 import { backup, restoreBackup } from '../backup';
 import type { GitServiceAPI } from '../git-service';
+import { providerAuthInWindowGetPersistedCookies, providerAuthInWindowStart } from '../provider-auth-in-window';
 import installPlugin from '../install-plugin';
 import type { CurlBridgeAPI } from '../network/curl';
 import { cancelCurlRequest, curlRequest } from '../network/libcurl-promise';
@@ -97,6 +98,10 @@ export interface RendererToMainBridgeAPI {
   backup: () => Promise<void>;
   restoreBackup: (version: string) => Promise<void>;
   authorizeUserInWindow: typeof authorizeUserInWindow;
+  providerAuthInWindow: {
+    start: typeof providerAuthInWindowStart;
+    getPersistedCookies: typeof providerAuthInWindowGetPersistedCookies;
+  };
   authorizeUserInDefaultBrowser: typeof authorizeUserInDefaultBrowser;
   onDefaultBrowserOAuthRedirect: typeof onDefaultBrowserOAuthRedirect;
   cancelAuthorizationInDefaultBrowser: typeof cancelAuthorizationInDefaultBrowser;
@@ -214,6 +219,15 @@ export function registerMainHandlers() {
     const { url, urlSuccessRegex, urlFailureRegex, sessionId } = options;
     return authorizeUserInWindow({ url, urlSuccessRegex, urlFailureRegex, sessionId });
   });
+  ipcMainHandle('providerAuthInWindow.start', (_, options: Parameters<typeof providerAuthInWindowStart>[0]) => {
+    return providerAuthInWindowStart(options);
+  });
+  ipcMainHandle(
+    'providerAuthInWindow.getPersistedCookies',
+    (_, options: Parameters<typeof providerAuthInWindowGetPersistedCookies>[0]) => {
+      return providerAuthInWindowGetPersistedCookies(options);
+    },
+  );
 
   ipcMainHandle('authorizeUserInDefaultBrowser', (_, options: Parameters<typeof authorizeUserInDefaultBrowser>[0]) => {
     return authorizeUserInDefaultBrowser(options);
