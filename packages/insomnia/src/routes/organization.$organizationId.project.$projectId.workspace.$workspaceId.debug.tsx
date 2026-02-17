@@ -1217,6 +1217,23 @@ const Debug = () => {
                     `/organization/${organizationId}/project/${projectId}/workspace/${workspaceId}/debug/request/${id}?${searchParams.toString()}`,
                   );
                 }}
+                onDeleteRequests={ids => {
+                  showModal(AskModal, {
+                    title: 'Delete Endpoints?',
+                    message: `Delete ${ids.length} endpoint${ids.length !== 1 ? 's' : ''}?`,
+                    color: 'danger',
+                    onDone: async (confirmed: boolean) => {
+                      if (confirmed) {
+                        ids.forEach(id => deleteRequestFetcher.submit({
+                          organizationId,
+                          projectId,
+                          workspaceId,
+                          id,
+                        }));
+                      }
+                    },
+                  });
+                }}
               />
             ) : (
               <>
