@@ -50,6 +50,18 @@ export interface ProviderCapturedRequest {
   path: string;
   host: string;
   url: string;
+  requestHeaders: Array<{ name: string; value: string }>;
+  requestBody: string | null;
+  requestContentType: string | null;
+  queryString: string;
+  response: {
+    statusCode: number;
+    statusMessage: string;
+    headers: Array<{ name: string; value: string }>;
+    contentType: string;
+    bodyPath: string | null;
+    bodySize: number;
+  } | null;
 }
 
 export interface ProviderEndpointDefinition {

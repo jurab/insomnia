@@ -1,5 +1,6 @@
 import * as models from '~/models';
 import type { Request } from '~/models/request';
+import type { ResponseHeader } from '~/models/response';
 
 import { getProviderConfig } from './provider-config';
 import type { ProviderCapturedRequest, ProviderEndpointDefinition, ProviderId } from './types';
@@ -143,24 +144,79 @@ export const upsertDiscoveredProviderRequests = async ({
     uniqueRequests.set(`${request.method} ${request.path}`, request);
   }
 
+  const existingRequests = await models.request.findByParentId(discoveredFolder._id);
+
   let created = 0;
   let updated = 0;
-  for (const request of uniqueRequests.values()) {
-    const operation = await createOrUpdateRequest({
-      parentId: discoveredFolder._id,
-      endpoint: {
-        id: `${request.method}-${request.path}`,
-        method: request.method,
-        path: request.path,
-        name: `${request.method} ${request.path}`,
-      },
-      baseUrl: providerConfig.baseUrl,
-    });
+  for (const capturedRequest of uniqueRequests.values()) {
+    const name = `${capturedRequest.method} ${capturedRequest.path}`;
+    const existing = existingRequests.find(r => r.name === name);
 
-    if (operation === 'created') {
-      created += 1;
-    } else {
+    // Use actual captured URL (without query string) so the endpoint is immediately callable
+    let requestUrl: string;
+    try {
+      const parsed = new URL(capturedRequest.url);
+      requestUrl = `${parsed.origin}${parsed.pathname}`;
+    } catch {
+      requestUrl = `${providerConfig.baseUrl}${capturedRequest.path}`;
+    }
+
+    // Parse query string into parameters
+    const parameters: Array<{ name: string; value: string }> = [];
+    if (capturedRequest.queryString) {
+      const searchParams = new URLSearchParams(capturedRequest.queryString);
+      for (const [paramName, paramValue] of searchParams) {
+        parameters.push({ name: paramName, value: paramValue });
+      }
+    }
+
+    const patch: Partial<Request> = {
+      parentId: discoveredFolder._id,
+      name,
+      method: capturedRequest.method,
+      url: requestUrl,
+      headers: capturedRequest.requestHeaders.map(h => ({ name: h.name, value: h.value })),
+      parameters,
+      ...(capturedRequest.requestBody ? {
+        body: {
+          mimeType: capturedRequest.requestContentType || 'application/json',
+          text: capturedRequest.requestBody,
+        },
+      } : {}),
+    };
+
+    let requestId: string;
+    if (existing) {
+      await models.request.update(existing, patch);
+      requestId = existing._id;
       updated += 1;
+    } else {
+      const createdRequest = await models.request.create(patch);
+      requestId = createdRequest._id;
+      created += 1;
+    }
+
+    // Create a Response record so the response pane shows captured data
+    if (capturedRequest.response) {
+      const responseHeaders: ResponseHeader[] = capturedRequest.response.headers.map(h => ({
+        name: h.name,
+        value: h.value,
+      }));
+
+      await models.response.create({
+        parentId: requestId,
+        statusCode: capturedRequest.response.statusCode,
+        statusMessage: capturedRequest.response.statusMessage,
+        headers: responseHeaders,
+        contentType: capturedRequest.response.contentType,
+        bodyPath: capturedRequest.response.bodyPath || '',
+        bodyCompression: null,
+        bytesContent: capturedRequest.response.bodySize,
+        bytesRead: capturedRequest.response.bodySize,
+        elapsedTime: 0,
+        environmentId: null,
+        url: requestUrl,
+      }, 1); // maxResponses=1: only keep one captured response per discovered endpoint
     }
   }
 

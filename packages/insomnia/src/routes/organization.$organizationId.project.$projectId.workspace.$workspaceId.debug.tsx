@@ -917,14 +917,6 @@ const Debug = () => {
               parentId: workspaceId,
             }),
         },
-        {
-          id: 'Browser',
-          name: 'Browser',
-          icon: 'globe',
-          action: () => {
-            void openProviderBrowser();
-          },
-        },
       ],
     },
     {
@@ -1038,6 +1030,16 @@ const Debug = () => {
             </ListBox>
           </Popover>
         </Select>
+        {selectedProviderId !== 'backend' && (
+          <Button
+            className="flex h-7 items-center gap-1 rounded-xs px-2 text-sm text-(--color-font) ring-1 ring-(--hl-sm) transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) disabled:opacity-50"
+            isDisabled={!!runningProviderId}
+            onPress={() => void openProviderBrowser()}
+          >
+            <Icon icon="globe" className="w-4" />
+            <span>Browse</span>
+          </Button>
+        )}
         <div className="min-w-0 flex-1 truncate text-sm text-(--color-font-secondary)" title={activeRequest?.url}>
           {activeRequest?.url || 'No request selected'}
         </div>
