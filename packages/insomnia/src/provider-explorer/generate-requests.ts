@@ -216,7 +216,7 @@ export const upsertDiscoveredProviderRequests = async ({
         elapsedTime: 0,
         environmentId: null,
         url: requestUrl,
-      }, 1); // maxResponses=1: only keep one captured response per discovered endpoint
+      }, 20); // keep history of captured responses across browse sessions
     }
   }
 
