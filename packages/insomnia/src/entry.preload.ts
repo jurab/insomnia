@@ -179,6 +179,7 @@ const main: Window['main'] = {
   providerAuthInWindow: {
     start: options => ipcRenderer.invoke('providerAuthInWindow.start', options),
     getPersistedCookies: options => ipcRenderer.invoke('providerAuthInWindow.getPersistedCookies', options),
+    validateCookies: options => ipcRenderer.invoke('providerAuthInWindow.validateCookies', options),
   },
   authorizeUserInDefaultBrowser: options => ipcRenderer.invoke('authorizeUserInDefaultBrowser', options),
   onDefaultBrowserOAuthRedirect: options => ipcRenderer.invoke('onDefaultBrowserOAuthRedirect', options),

@@ -283,6 +283,10 @@ const Debug = () => {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [selectedProviderId, setSelectedProviderId] = useState<ProviderSelectionId>('backend');
   const [runningProviderId, setRunningProviderId] = useState<ProviderId | null>(null);
+  // 'valid' = healthcheck passed, 'invalid' = no cookies, 'unknown' = has cookies but no healthcheck, 'error' = healthcheck failed
+  type CookieStatus = 'valid' | 'invalid' | 'unknown' | 'error';
+  const [providerCookieStatus, setProviderCookieStatus] = useState<Record<string, CookieStatus>>({});
+  const [cookieDeletePending, setCookieDeletePending] = useState(false);
 
   const patchRequest = useRequestPatcher();
   const patchGroup = useRequestGroupPatcher();
@@ -300,6 +304,56 @@ const Debug = () => {
       unsubscribe();
     };
   }, []);
+
+  // Load and validate cookie status for all providers on mount
+  useEffect(() => {
+    const check = async () => {
+      const statuses: Record<string, CookieStatus> = {};
+      for (const p of providerConfigList) {
+        const providerSession = await getProviderSession(organizationId, p.id);
+        const cookies = providerSession?.cookies ?? [];
+        if (!cookies.length) {
+          statuses[p.id] = 'invalid';
+          continue;
+        }
+        const config = getProviderConfig(p.id);
+        if (config.healthCheckPath) {
+          try {
+            const result = await window.main.providerAuthInWindow.validateCookies({
+              url: `${config.baseUrl}${config.healthCheckPath}`,
+              cookies,
+            });
+            statuses[p.id] = result.valid ? 'valid' : 'invalid';
+          } catch {
+            statuses[p.id] = 'error';
+          }
+        } else {
+          statuses[p.id] = 'unknown';
+        }
+      }
+      setProviderCookieStatus(statuses);
+    };
+    void check();
+  }, [organizationId]);
+
+  const cookieStatus = selectedProviderId !== 'backend' ? (providerCookieStatus[selectedProviderId] ?? 'invalid') : 'invalid';
+  const hasCookies = cookieStatus === 'valid' || cookieStatus === 'unknown';
+
+  const handleCookieClick = useCallback(async () => {
+    if (selectedProviderId === 'backend') {
+      return;
+    }
+    if (cookieDeletePending) {
+      // 2nd click: actually delete
+      await saveProviderSession({ organizationId, providerId: selectedProviderId, cookies: [] });
+      setProviderCookieStatus(prev => ({ ...prev, [selectedProviderId]: 'invalid' }));
+      setCookieDeletePending(false);
+    } else if (hasCookies) {
+      // 1st click: arm delete (only when cookies exist)
+      setCookieDeletePending(true);
+      setTimeout(() => setCookieDeletePending(false), 3000);
+    }
+  }, [cookieDeletePending, hasCookies, organizationId, selectedProviderId]);
 
   const { settings } = useRootLoaderData()!;
 
@@ -553,6 +607,7 @@ const Debug = () => {
           providerId,
           cookies,
         });
+        setProviderCookieStatus(prev => ({ ...prev, [providerId]: getProviderConfig(providerId).healthCheckPath ? 'valid' : 'unknown' }));
 
         const syncResult = await syncProviderCookiesToWorkspace({
           workspaceId,
@@ -631,6 +686,8 @@ const Debug = () => {
     );
   }, [collection, selectedProviderId]);
 
+  const [autoSelectProvider, setAutoSelectProvider] = useState<ProviderId | null>(null);
+
   const openProviderBrowser = useCallback(async () => {
     if (selectedProviderId === 'backend') {
       showToast({
@@ -655,6 +712,7 @@ const Debug = () => {
           providerId: selectedProviderId,
           cookies: result.cookies,
         });
+        setProviderCookieStatus(prev => ({ ...prev, [selectedProviderId]: getProviderConfig(selectedProviderId).healthCheckPath ? 'valid' : 'unknown' }));
       }
 
       if (result.capturedRequests?.length) {
@@ -712,6 +770,26 @@ const Debug = () => {
   const reorderFetcher = useDebugReorderActionFetcher();
 
   const navigate = useNavigate();
+
+  // Auto-select an endpoint when switching providers
+  useEffect(() => {
+    if (!autoSelectProvider || selectedProviderId !== autoSelectProvider) {
+      return;
+    }
+    const requests = scopedCollection.filter(item => isRequest(item.doc));
+    if (!requests.length) {
+      return;
+    }
+    const config = getProviderConfig(autoSelectProvider);
+    const healthCheckMatch = config.healthCheckPath
+      ? requests.find(item => isRequest(item.doc) && item.doc.url.includes(config.healthCheckPath!))
+      : null;
+    const target = healthCheckMatch ?? requests[0];
+    setAutoSelectProvider(null);
+    navigate(
+      `/organization/${organizationId}/project/${projectId}/workspace/${workspaceId}/debug/request/${target.doc._id}?${searchParams.toString()}`,
+    );
+  }, [autoSelectProvider, scopedCollection, selectedProviderId, organizationId, projectId, workspaceId, searchParams, navigate]);
 
   const collectionDragAndDrop = useDragAndDrop({
     getItems: keys => [...keys].map(key => ({ 'text/plain': key.toString() })),
@@ -994,6 +1072,7 @@ const Debug = () => {
               setSelectedProviderId('backend');
             } else {
               setSelectedProviderId(id);
+              setAutoSelectProvider(id);
               void runProviderWorkflow(id);
             }
           }}
@@ -1022,6 +1101,14 @@ const Debug = () => {
                   {({ isSelected }) => (
                     <Fragment>
                       <Icon icon={item.id === 'backend' ? 'server' : 'store'} className="w-4" />
+                      {item.id !== 'backend' && (
+                        <span className={`h-1.5 w-1.5 rounded-full ${
+                          providerCookieStatus[item.id] === 'valid' ? 'bg-(--color-success)' :
+                          providerCookieStatus[item.id] === 'unknown' ? 'bg-(--hl)' :
+                          providerCookieStatus[item.id] === 'error' ? 'bg-(--color-warning) animate-pulse' :
+                          'bg-(--color-danger)'
+                        }`} />
+                      )}
                       <span>{item.name}</span>
                       {isSelected && <Icon icon="check" className="ml-auto text-(--color-success)" />}
                     </Fragment>
@@ -1032,14 +1119,38 @@ const Debug = () => {
           </Popover>
         </Select>
         {selectedProviderId !== 'backend' && (
-          <Button
-            className="flex h-7 items-center gap-1 rounded-xs px-2 text-sm text-(--color-font) ring-1 ring-(--hl-sm) transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) disabled:opacity-50"
-            isDisabled={!!runningProviderId}
-            onPress={() => void openProviderBrowser()}
-          >
-            <Icon icon="globe" className="w-4" />
-            <span>Browse</span>
-          </Button>
+          <>
+            <Button
+              className="flex h-7 items-center gap-1 rounded-xs px-2 text-sm text-(--color-font) ring-1 ring-(--hl-sm) transition-all hover:bg-(--hl-xs) focus:ring-(--hl-md) disabled:opacity-50"
+              isDisabled={!!runningProviderId}
+              onPress={() => void openProviderBrowser()}
+            >
+              <Icon icon="globe" className="w-4" />
+              <span>{hasCookies ? 'Browse' : 'Log In'}</span>
+            </Button>
+            <button
+              className="flex h-7 items-center gap-1.5 rounded-xs px-2 text-xs text-(--color-font) ring-1 ring-(--hl-sm) transition-all hover:bg-(--hl-xs)"
+              onClick={() => void handleCookieClick()}
+            >
+              {cookieDeletePending ? (
+                <>
+                  <Icon icon="trash" className="text-(--color-danger)" />
+                  <span>Cookies</span>
+                  <span className="h-2 w-2 rounded-full bg-(--color-danger)" />
+                </>
+              ) : (
+                <>
+                  <span>Cookies</span>
+                  <span className={`h-2 w-2 rounded-full ${
+                    cookieStatus === 'valid' ? 'bg-(--color-success)' :
+                    cookieStatus === 'unknown' ? 'bg-(--hl)' :
+                    cookieStatus === 'error' ? 'bg-(--color-warning) animate-pulse' :
+                    'bg-(--color-danger)'
+                  }`} />
+                </>
+              )}
+            </button>
+          </>
         )}
         <div className="min-w-0 flex-1 truncate text-sm text-(--color-font-secondary)" title={activeRequest?.url}>
           {activeRequest?.url || 'No request selected'}

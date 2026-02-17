@@ -82,4 +82,6 @@ export interface ProviderConfig {
     domainFilters: string[];
   };
   endpoints: ProviderEndpointDefinition[];
+  /** Path to an auth-gated endpoint for cookie validation (GET, expects 200 when authed) */
+  healthCheckPath?: string;
 }

@@ -114,6 +114,7 @@ export type HandleChannels =
   | 'parseImport'
   | 'providerAuthInWindow.start'
   | 'providerAuthInWindow.getPersistedCookies'
+  | 'providerAuthInWindow.validateCookies'
   | 'readCurlResponse'
   | 'readDir'
   | 'readOrCreateDataDir'

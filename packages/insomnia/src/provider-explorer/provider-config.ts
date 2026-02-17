@@ -13,6 +13,7 @@ export const providerConfigs: Record<ProviderId, ProviderConfig> = {
       ],
       domainFilters: ['kosik.cz', '.kosik.cz'],
     },
+    healthCheckPath: '/api/front/profile',
     endpoints: [
       { id: 'direct-profile', method: 'GET', path: '/api/front/profile', name: 'Profile' },
       {
@@ -27,6 +28,7 @@ export const providerConfigs: Record<ProviderId, ProviderConfig> = {
     id: 'rohlik',
     label: 'Rohlik',
     baseUrl: 'https://www.rohlik.cz',
+    healthCheckPath: '/services/frontend-service/v2/cart-review/check-cart',
     auth: {
       loginUrl: 'https://www.rohlik.cz/',
       successRules: [{ type: 'includes', value: '/uzivatel/prihlaseni' }],

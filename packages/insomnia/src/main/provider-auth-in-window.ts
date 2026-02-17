@@ -600,3 +600,25 @@ export async function providerAuthInWindowGetPersistedCookies(options: ProviderA
   const partitionSession = session.fromPartition(`persist:provider-auth:${options.providerId}`);
   return getFilteredCookies(partitionSession, options.domainFilters);
 }
+
+export async function providerAuthInWindowValidateCookies(options: {
+  url: string;
+  cookies: ProviderCookie[];
+}): Promise<{ valid: boolean; statusCode: number }> {
+  const cookieHeader = options.cookies
+    .map(c => `${c.name}=${c.value}`)
+    .join('; ');
+
+  try {
+    const { net } = require('electron');
+    const response = await net.fetch(options.url, {
+      method: 'GET',
+      headers: { Cookie: cookieHeader },
+      redirect: 'manual',
+    });
+    const valid = response.status >= 200 && response.status < 400;
+    return { valid, statusCode: response.status };
+  } catch {
+    return { valid: false, statusCode: 0 };
+  }
+}
