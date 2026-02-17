@@ -601,6 +601,11 @@ export async function providerAuthInWindowGetPersistedCookies(options: ProviderA
   return getFilteredCookies(partitionSession, options.domainFilters);
 }
 
+export async function providerAuthInWindowClearPersistedCookies(options: { providerId: string }) {
+  const partitionSession = session.fromPartition(`persist:provider-auth:${options.providerId}`);
+  await partitionSession.clearStorageData({ storages: ['cookies'] });
+}
+
 export async function providerAuthInWindowValidateCookies(options: {
   url: string;
   cookies: ProviderCookie[];

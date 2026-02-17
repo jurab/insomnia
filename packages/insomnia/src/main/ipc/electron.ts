@@ -113,6 +113,7 @@ export type HandleChannels =
   | 'openPath'
   | 'parseImport'
   | 'providerAuthInWindow.start'
+  | 'providerAuthInWindow.clearPersistedCookies'
   | 'providerAuthInWindow.getPersistedCookies'
   | 'providerAuthInWindow.validateCookies'
   | 'readCurlResponse'

@@ -344,8 +344,9 @@ const Debug = () => {
       return;
     }
     if (cookieDeletePending) {
-      // 2nd click: actually delete
+      // 2nd click: actually delete from both NeDB and Electron session partition
       await saveProviderSession({ organizationId, providerId: selectedProviderId, cookies: [] });
+      await window.main.providerAuthInWindow?.clearPersistedCookies?.({ providerId: selectedProviderId });
       setProviderCookieStatus(prev => ({ ...prev, [selectedProviderId]: 'invalid' }));
       setCookieDeletePending(false);
     } else if (hasCookies) {
