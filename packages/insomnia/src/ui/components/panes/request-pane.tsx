@@ -7,7 +7,7 @@ import * as reactUse from 'react-use';
 import { OneLineEditor } from '~/ui/components/.client/codemirror/one-line-editor';
 
 import { getContentTypeFromHeaders } from '../../../common/constants';
-import { getCombinedPathParametersFromUrl, type RequestParameter } from '../../../models/request';
+import { type BaseRequest, getCombinedPathParametersFromUrl, type RequestParameter } from '../../../models/request';
 import type { Settings } from '../../../models/settings';
 import { getAuthObjectOrNull } from '../../../network/authentication';
 import { useWorkspaceLoaderData } from '../../../routes/organization.$organizationId.project.$projectId.workspace.$workspaceId';
@@ -22,14 +22,45 @@ import { AuthWrapper } from '../editors/auth/auth-wrapper';
 import { BodyEditor } from '../editors/body/body-editor';
 import { readOnlyHttpPairs, RequestHeadersEditor } from '../editors/request-headers-editor';
 import { RequestParametersEditor } from '../editors/request-parameters-editor';
-import { RequestScriptEditor } from '../editors/request-script-editor';
 import { ErrorBoundary } from '../error-boundary';
 import { Icon } from '../icon';
-import { MarkdownEditor } from '../markdown-editor';
 import { RequestSettingsModal } from '../modals/request-settings-modal';
 import { RenderedQueryString } from '../rendered-query-string';
 import { Pane } from './pane';
 import { PlaceholderRequestPane } from './placeholder-request-pane';
+
+function buildRawRequestText(req: BaseRequest): string {
+  let url: URL;
+  try {
+    const cleaned = req.url.replace(/\{\{[^}]*\}\}/g, 'placeholder');
+    url = new URL(cleaned.startsWith('http') ? cleaned : `http://${cleaned}`);
+  } catch {
+    url = new URL('http://localhost');
+  }
+
+  const enabledParams = req.parameters.filter(p => !p.disabled);
+  if (enabledParams.length > 0) {
+    for (const p of enabledParams) {
+      url.searchParams.append(p.name, p.value);
+    }
+  }
+
+  const requestLine = `${req.method} ${url.pathname}${url.search} HTTP/1.1`;
+  const hostLine = `Host: ${url.host}`;
+
+  const headerLines = req.headers
+    .filter(h => !h.disabled)
+    .map(h => `${h.name}: ${h.value}`);
+
+  const lines = [requestLine, hostLine, ...headerLines];
+
+  const bodyText = req.body.text;
+  if (bodyText) {
+    lines.push('', bodyText);
+  }
+
+  return lines.join('\n');
+}
 
 interface Props {
   environmentId: string;
@@ -141,25 +172,9 @@ export const RequestPane: FC<Props> = ({ environmentId, settings }) => {
           </Tab>
           <Tab
             className="flex h-full shrink-0 cursor-pointer items-center justify-between gap-2 px-3 py-1 text-(--hl) outline-hidden transition-colors duration-300 select-none hover:bg-(--hl-sm) hover:text-(--color-font) focus:bg-(--hl-sm) aria-selected:bg-(--hl-xs) aria-selected:text-(--color-font) aria-selected:hover:bg-(--hl-sm) aria-selected:focus:bg-(--hl-sm)"
-            id="scripts"
+            id="raw"
           >
-            <span>Scripts</span>
-            {Boolean(activeRequest.preRequestScript || activeRequest.afterResponseScript) && (
-              <span className="flex h-6 min-w-6 items-center justify-center rounded-lg border border-solid border-(--hl) p-1 text-xs">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-              </span>
-            )}
-          </Tab>
-          <Tab
-            className="flex h-full shrink-0 cursor-pointer items-center justify-between gap-2 px-3 py-1 text-(--hl) outline-hidden transition-colors duration-300 select-none hover:bg-(--hl-sm) hover:text-(--color-font) focus:bg-(--hl-sm) aria-selected:bg-(--hl-xs) aria-selected:text-(--color-font) aria-selected:hover:bg-(--hl-sm) aria-selected:focus:bg-(--hl-sm)"
-            id="docs"
-          >
-            <span>Docs</span>
-            {activeRequest.description && (
-              <span className="flex h-6 min-w-6 items-center justify-center rounded-lg border border-solid border-(--hl) p-1 text-xs">
-                <span className="h-2 w-2 rounded-full bg-green-500" />
-              </span>
-            )}
+            <span>Raw</span>
           </Tab>
         </TabList>
         <TabPanel className="flex h-full w-full flex-1 flex-col overflow-y-auto" id="params">
@@ -288,70 +303,10 @@ export const RequestPane: FC<Props> = ({ environmentId, settings }) => {
             </Button>
           </div>
         </TabPanel>
-        <TabPanel className="w-full flex-1" id="scripts">
-          <Tabs className="flex h-full w-full flex-col overflow-hidden">
-            <TabList
-              className="flex h-(--line-height-sm) w-full shrink-0 items-center gap-2 overflow-x-auto border-b border-solid border-b-(--hl-md) bg-(--color-bg) px-2"
-              aria-label="Request scripts tabs"
-            >
-              <Tab
-                className="flex h-(--line-height-xxs) w-42 shrink-0 cursor-pointer items-center justify-between rounded-md px-2 py-1 text-sm text-(--hl) outline-hidden transition-colors duration-300 select-none hover:bg-[rgba(var(--color-surprise-rgb),50%)] hover:text-(--color-font-surprise) aria-selected:bg-[rgba(var(--color-surprise-rgb),40%)] aria-selected:text-(--color-font-surprise)"
-                id="pre-request"
-              >
-                <div className="flex flex-1 items-center gap-2">
-                  <Icon icon="arrow-right-to-bracket" />
-                  <span>Pre-request</span>
-                </div>
-                {Boolean(activeRequest.preRequestScript) && (
-                  <span className="rounded-lg p-2">
-                    <span className="flex h-2 w-2 rounded-full bg-green-500" />
-                  </span>
-                )}
-              </Tab>
-              <Tab
-                className="flex h-(--line-height-xxs) w-42 shrink-0 cursor-pointer items-center justify-between rounded-md px-2 py-1 text-sm text-(--hl) outline-hidden transition-colors duration-300 select-none hover:bg-[rgba(var(--color-surprise-rgb),50%)] hover:text-(--color-font-surprise) aria-selected:bg-[rgba(var(--color-surprise-rgb),40%)] aria-selected:text-(--color-font-surprise)"
-                id="after-response"
-              >
-                <div className="flex flex-1 items-center gap-2">
-                  <Icon icon="arrow-right-from-bracket" />
-                  <span>After-response</span>
-                </div>
-                {Boolean(activeRequest.afterResponseScript) && (
-                  <span className="rounded-lg p-2">
-                    <span className="flex h-2 w-2 rounded-full bg-green-500" />
-                  </span>
-                )}
-              </Tab>
-            </TabList>
-            <TabPanel className="w-full flex-1" id="pre-request">
-              <ErrorBoundary key={uniqueKey} errorClassName="tall wide vertically-align font-error pad text-center">
-                <RequestScriptEditor
-                  uniquenessKey={`${activeRequest._id}:pre-request-script`}
-                  defaultValue={activeRequest.preRequestScript || ''}
-                  onChange={preRequestScript => patchRequest(requestId, { preRequestScript })}
-                  settings={settings}
-                />
-              </ErrorBoundary>
-            </TabPanel>
-            <TabPanel className="w-full flex-1" id="after-response">
-              <ErrorBoundary key={uniqueKey} errorClassName="tall wide vertically-align font-error pad text-center">
-                <RequestScriptEditor
-                  uniquenessKey={`${activeRequest._id}:after-response-script`}
-                  defaultValue={activeRequest.afterResponseScript || ''}
-                  onChange={afterResponseScript => patchRequest(requestId, { afterResponseScript })}
-                  settings={settings}
-                />
-              </ErrorBoundary>
-            </TabPanel>
-          </Tabs>
-        </TabPanel>
-        <TabPanel className="w-full flex-1 overflow-y-auto" id="docs">
-          <MarkdownEditor
-            key={uniqueKey}
-            placeholder="Write a description"
-            defaultValue={activeRequest.description}
-            onChange={(description: string) => patchRequest(requestId, { description })}
-          />
+        <TabPanel className="w-full flex-1 overflow-y-auto" id="raw">
+          <pre className="whitespace-pre-wrap break-all p-4 font-mono text-xs text-(--color-font) leading-relaxed">
+            {buildRawRequestText(activeRequest)}
+          </pre>
         </TabPanel>
       </Tabs>
       {isRequestSettingsModalOpen && (
