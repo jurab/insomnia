@@ -107,6 +107,7 @@ import { ResponsePane } from '~/ui/components/panes/response-pane';
 import { RequestUrlBar } from '~/ui/components/request-url-bar';
 import { SocketIORequestPane } from '~/ui/components/socket-io/request-pane';
 import { getMethodShortHand } from '~/ui/components/tags/method-tag';
+import { ProviderUrlTree } from '~/ui/components/provider-explorer/url-tree';
 import { showResourceNotFoundToast, showToast } from '~/ui/components/toast-notification';
 import { RealtimeResponsePane } from '~/ui/components/websockets/realtime-response-pane';
 import { WebSocketRequestPane } from '~/ui/components/websockets/websocket-request-pane';
@@ -1208,154 +1209,167 @@ const Debug = () => {
               </MenuTrigger>
             </div>
 
-            <GridList
-              id="sidebar-pinned-request-gridlist"
-              className="max-h-[50%] overflow-y-auto border-t border-b border-solid border-(--hl-sm) py-(--padding-sm) data-empty:border-none data-empty:py-0"
-              items={scopedCollection.filter(item => item.pinned)}
-              aria-label="Pinned Requests"
-              disallowEmptySelection
-              selectedKeys={requestId ? [requestId] : []}
-              selectionMode="single"
-              onSelectionChange={keys => {
-                if (keys !== 'all') {
-                  const value = keys.values().next().value;
-                  navigate(
-                    `/organization/${organizationId}/project/${projectId}/workspace/${workspaceId}/debug/request/${value}?${searchParams.toString()}`,
-                  );
-                }
-              }}
-            >
-              {item => {
-                return (
-                  <GridListItem
-                    key={item.doc._id}
-                    id={item.doc._id}
-                    className="group outline-hidden select-none"
-                    textValue={item.doc.name}
-                    data-testid={item.doc.name}
-                  >
-                    <div className="relative flex h-(--line-height-xs) w-full items-center gap-2 overflow-hidden px-4 text-(--hl) outline-hidden transition-colors select-none group-hover:bg-(--hl-xs) group-focus:bg-(--hl-sm) group-aria-selected:text-(--color-font)">
-                      <span className="absolute top-0 left-0 h-full w-[2px] bg-transparent transition-colors group-aria-selected:bg-(--color-surprise)" />
-                      {isRequest(item.doc) && (
-                        <span
-                          className={`flex w-10 shrink-0 items-center justify-center rounded-xs border border-solid border-(--hl-sm) text-[0.65rem] ${
-                            {
-                              GET: 'bg-[rgba(var(--color-surprise-rgb),0.5)] text-(--color-font-surprise)',
-                              POST: 'bg-[rgba(var(--color-success-rgb),0.5)] text-(--color-font-success)',
-                              HEAD: 'bg-[rgba(var(--color-info-rgb),0.5)] text-(--color-font-info)',
-                              OPTIONS: 'bg-[rgba(var(--color-info-rgb),0.5)] text-(--color-font-info)',
-                              DELETE: 'bg-[rgba(var(--color-danger-rgb),0.5)] text-(--color-font-danger)',
-                              PUT: 'bg-[rgba(var(--color-warning-rgb),0.5)] text-(--color-font-warning)',
-                              PATCH: 'bg-[rgba(var(--color-notice-rgb),0.5)] text-(--color-font-notice)',
-                            }[item.doc.method] || 'bg-(--hl-md) text-(--color-font)'
-                          }`}
-                        >
-                          {getMethodShortHand(item.doc)}
-                        </span>
-                      )}
-                      {isWebSocketRequest(item.doc) && (
-                        <span className="flex w-10 shrink-0 items-center justify-center rounded-xs border border-solid border-(--hl-sm) bg-[rgba(var(--color-notice-rgb),0.5)] text-[0.65rem] text-(--color-font-notice)">
-                          WS
-                        </span>
-                      )}
-                      {isSocketIORequest(item.doc) && (
-                        <span className="flex w-10 shrink-0 items-center justify-center rounded-xs border border-solid border-(--hl-sm) bg-[rgba(var(--color-notice-rgb),0.5)] text-[0.65rem] text-(--color-font-notice)">
-                          IO
-                        </span>
-                      )}
-                      {isGrpcRequest(item.doc) && (
-                        <span className="flex w-10 shrink-0 items-center justify-center rounded-xs border border-solid border-(--hl-sm) bg-[rgba(var(--color-info-rgb),0.5)] text-[0.65rem] text-(--color-font-info)">
-                          gRPC
-                        </span>
-                      )}
-                      <EditableInput
-                        value={getRequestNameOrFallback(item.doc)}
-                        name="request name"
-                        ariaLabel="request name"
-                        className="flex-1 px-1"
-                        onSubmit={newName => {
-                          if (isRequestGroup(item.doc)) {
-                            patchGroup(item.doc._id, { name: newName });
-                          } else {
-                            patchRequest(item.doc._id, { name: newName });
-                          }
-                        }}
-                      />
-                      {item.pinned && (
-                        <Icon
-                          className="text-(--font-size-sm)"
-                          icon="thumb-tack"
-                          onDoubleClick={() => patchRequestMeta(item.doc._id, { pinned: !item.pinned })}
-                        />
-                      )}
-                    </div>
-                  </GridListItem>
-                );
-              }}
-            </GridList>
-
-            <div className="flex-1 overflow-y-auto" ref={parentRef}>
-              <GridList
-                id="sidebar-request-gridlist"
-                style={{ height: virtualizer.getTotalSize() }}
-                items={virtualizer.getVirtualItems()}
-                className="relative"
-                aria-label="Request Collection"
-                key={sortOrder}
-                dragAndDropHooks={sortOrder === 'type-manual' ? collectionDragAndDrop.dragAndDropHooks : undefined}
-                onAction={key => {
-                  const id = key.toString();
-                  if (isRequestGroupId(id)) {
-                    const item = scopedCollection.find(i => i.doc._id === id);
-                    if (item) {
-                      groupMetaPatcher(item.doc._id, { collapsed: !item.collapsed });
-                      navigate(
-                        `/organization/${organizationId}/project/${projectId}/workspace/${workspaceId}/debug/request-group/${id}?${searchParams.toString()}`,
-                      );
-                      return;
-                    }
-                  }
+            {selectedProviderId !== 'backend' ? (
+              <ProviderUrlTree
+                requests={scopedCollection}
+                onSelectRequest={id => {
                   navigate(
                     `/organization/${organizationId}/project/${projectId}/workspace/${workspaceId}/debug/request/${id}?${searchParams.toString()}`,
                   );
                 }}
-              >
-                {virtualItem => {
-                  const item = visibleCollection[virtualItem.index];
-                  let label = item.doc.name;
-                  if (isRequest(item.doc)) {
-                    label = `${getMethodShortHand(item.doc)} ${label}`;
-                  } else if (isWebSocketRequest(item.doc)) {
-                    label = `WS ${label}`;
-                  } else if (isGrpcRequest(item.doc)) {
-                    label = `gRPC ${label}`;
-                  }
+              />
+            ) : (
+              <>
+                <GridList
+                  id="sidebar-pinned-request-gridlist"
+                  className="max-h-[50%] overflow-y-auto border-t border-b border-solid border-(--hl-sm) py-(--padding-sm) data-empty:border-none data-empty:py-0"
+                  items={scopedCollection.filter(item => item.pinned)}
+                  aria-label="Pinned Requests"
+                  disallowEmptySelection
+                  selectedKeys={requestId ? [requestId] : []}
+                  selectionMode="single"
+                  onSelectionChange={keys => {
+                    if (keys !== 'all') {
+                      const value = keys.values().next().value;
+                      navigate(
+                        `/organization/${organizationId}/project/${projectId}/workspace/${workspaceId}/debug/request/${value}?${searchParams.toString()}`,
+                      );
+                    }
+                  }}
+                >
+                  {item => {
+                    return (
+                      <GridListItem
+                        key={item.doc._id}
+                        id={item.doc._id}
+                        className="group outline-hidden select-none"
+                        textValue={item.doc.name}
+                        data-testid={item.doc.name}
+                      >
+                        <div className="relative flex h-(--line-height-xs) w-full items-center gap-2 overflow-hidden px-4 text-(--hl) outline-hidden transition-colors select-none group-hover:bg-(--hl-xs) group-focus:bg-(--hl-sm) group-aria-selected:text-(--color-font)">
+                          <span className="absolute top-0 left-0 h-full w-[2px] bg-transparent transition-colors group-aria-selected:bg-(--color-surprise)" />
+                          {isRequest(item.doc) && (
+                            <span
+                              className={`flex w-10 shrink-0 items-center justify-center rounded-xs border border-solid border-(--hl-sm) text-[0.65rem] ${
+                                {
+                                  GET: 'bg-[rgba(var(--color-surprise-rgb),0.5)] text-(--color-font-surprise)',
+                                  POST: 'bg-[rgba(var(--color-success-rgb),0.5)] text-(--color-font-success)',
+                                  HEAD: 'bg-[rgba(var(--color-info-rgb),0.5)] text-(--color-font-info)',
+                                  OPTIONS: 'bg-[rgba(var(--color-info-rgb),0.5)] text-(--color-font-info)',
+                                  DELETE: 'bg-[rgba(var(--color-danger-rgb),0.5)] text-(--color-font-danger)',
+                                  PUT: 'bg-[rgba(var(--color-warning-rgb),0.5)] text-(--color-font-warning)',
+                                  PATCH: 'bg-[rgba(var(--color-notice-rgb),0.5)] text-(--color-font-notice)',
+                                }[item.doc.method] || 'bg-(--hl-md) text-(--color-font)'
+                              }`}
+                            >
+                              {getMethodShortHand(item.doc)}
+                            </span>
+                          )}
+                          {isWebSocketRequest(item.doc) && (
+                            <span className="flex w-10 shrink-0 items-center justify-center rounded-xs border border-solid border-(--hl-sm) bg-[rgba(var(--color-notice-rgb),0.5)] text-[0.65rem] text-(--color-font-notice)">
+                              WS
+                            </span>
+                          )}
+                          {isSocketIORequest(item.doc) && (
+                            <span className="flex w-10 shrink-0 items-center justify-center rounded-xs border border-solid border-(--hl-sm) bg-[rgba(var(--color-notice-rgb),0.5)] text-[0.65rem] text-(--color-font-notice)">
+                              IO
+                            </span>
+                          )}
+                          {isGrpcRequest(item.doc) && (
+                            <span className="flex w-10 shrink-0 items-center justify-center rounded-xs border border-solid border-(--hl-sm) bg-[rgba(var(--color-info-rgb),0.5)] text-[0.65rem] text-(--color-font-info)">
+                              gRPC
+                            </span>
+                          )}
+                          <EditableInput
+                            value={getRequestNameOrFallback(item.doc)}
+                            name="request name"
+                            ariaLabel="request name"
+                            className="flex-1 px-1"
+                            onSubmit={newName => {
+                              if (isRequestGroup(item.doc)) {
+                                patchGroup(item.doc._id, { name: newName });
+                              } else {
+                                patchRequest(item.doc._id, { name: newName });
+                              }
+                            }}
+                          />
+                          {item.pinned && (
+                            <Icon
+                              className="text-(--font-size-sm)"
+                              icon="thumb-tack"
+                              onDoubleClick={() => patchRequestMeta(item.doc._id, { pinned: !item.pinned })}
+                            />
+                          )}
+                        </div>
+                      </GridListItem>
+                    );
+                  }}
+                </GridList>
 
-                  return (
-                    <CollectionGridListItem
-                      {...{
-                        label,
-                        style: {
-                          height: `${virtualItem.size}`,
-                          transform: `translateY(${virtualItem.start}px)`,
-                        },
-                        item,
-                        navigate,
-                        organizationId,
-                        projectId,
-                        workspaceId,
-                        searchParams,
-                        groupMetaPatcher,
-                        patchGroup,
-                        patchRequest,
-                        activeEnvironment,
-                        activeProject,
-                      }}
-                    />
-                  );
-                }}
-              </GridList>
-            </div>
+                <div className="flex-1 overflow-y-auto" ref={parentRef}>
+                  <GridList
+                    id="sidebar-request-gridlist"
+                    style={{ height: virtualizer.getTotalSize() }}
+                    items={virtualizer.getVirtualItems()}
+                    className="relative"
+                    aria-label="Request Collection"
+                    key={sortOrder}
+                    dragAndDropHooks={sortOrder === 'type-manual' ? collectionDragAndDrop.dragAndDropHooks : undefined}
+                    onAction={key => {
+                      const id = key.toString();
+                      if (isRequestGroupId(id)) {
+                        const item = scopedCollection.find(i => i.doc._id === id);
+                        if (item) {
+                          groupMetaPatcher(item.doc._id, { collapsed: !item.collapsed });
+                          navigate(
+                            `/organization/${organizationId}/project/${projectId}/workspace/${workspaceId}/debug/request-group/${id}?${searchParams.toString()}`,
+                          );
+                          return;
+                        }
+                      }
+                      navigate(
+                        `/organization/${organizationId}/project/${projectId}/workspace/${workspaceId}/debug/request/${id}?${searchParams.toString()}`,
+                      );
+                    }}
+                  >
+                    {virtualItem => {
+                      const item = visibleCollection[virtualItem.index];
+                      let label = item.doc.name;
+                      if (isRequest(item.doc)) {
+                        label = `${getMethodShortHand(item.doc)} ${label}`;
+                      } else if (isWebSocketRequest(item.doc)) {
+                        label = `WS ${label}`;
+                      } else if (isGrpcRequest(item.doc)) {
+                        label = `gRPC ${label}`;
+                      }
+
+                      return (
+                        <CollectionGridListItem
+                          {...{
+                            label,
+                            style: {
+                              height: `${virtualItem.size}`,
+                              transform: `translateY(${virtualItem.start}px)`,
+                            },
+                            item,
+                            navigate,
+                            organizationId,
+                            projectId,
+                            workspaceId,
+                            searchParams,
+                            groupMetaPatcher,
+                            patchGroup,
+                            patchRequest,
+                            activeEnvironment,
+                            activeProject,
+                          }}
+                        />
+                      );
+                    }}
+                  </GridList>
+                </div>
+              </>
+            )}
           </div>
 
           <WorkspaceSyncDropdown />
